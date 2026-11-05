@@ -50,6 +50,7 @@ add_library(
     dynamic_library.cpp
     dynamic_library.h
     elf.h
+    env.h
     error.cpp
     error.h
     fiber.cpp

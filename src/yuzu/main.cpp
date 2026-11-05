@@ -10,6 +10,7 @@
 #include <QApplication>
 
 #include "common/crash_dump.h"
+#include "common/env.h"
 #include "common/fs/fs_paths.h"
 #include "common/fs/path_util.h"
 #include "startup_checks.h"
@@ -151,7 +152,7 @@ static void LoadNx2Switches(const char* argv0) {
 #endif
     ParseSwitchFile(config_dir / "nx2_switches.txt", entries);
     for (const auto& [name, value] : entries) {
-        if (std::getenv(name.c_str()) != nullptr) {
+        if (Common::Env::IsSet(name.c_str())) {
             continue;
         }
 #ifdef _WIN32

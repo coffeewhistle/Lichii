@@ -15,6 +15,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_timer.h>
 
+#include "common/env.h"
 #include "core/frontend/emu_window.h"
 #include "core/frontend/graphics_context.h"
 
@@ -30,8 +31,7 @@ enum class MouseButton;
 // EDEN_NX2_HIDE_WINDOW=1 (anything but 0) creates the render window hidden and without focus, for unattended
 // test runs that must not cover or interrupt the desktop.
 inline SDL_WindowFlags Nx2HiddenWindowFlags() {
-    const char* hide = std::getenv("EDEN_NX2_HIDE_WINDOW");
-    return hide != nullptr && hide[0] != '0' ? SDL_WINDOW_HIDDEN | SDL_WINDOW_NOT_FOCUSABLE
+    return Common::Env::Flag("EDEN_NX2_HIDE_WINDOW") ? SDL_WINDOW_HIDDEN | SDL_WINDOW_NOT_FOCUSABLE
                                                          : SDL_WindowFlags{0};
 }
 

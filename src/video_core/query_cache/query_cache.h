@@ -16,6 +16,7 @@
 
 #include "common/assert.h"
 #include "common/common_types.h"
+#include "common/env.h"
 #include "common/logging.h"
 #include "common/scope_exit.h"
 #include "common/settings.h"
@@ -237,11 +238,8 @@ void QueryCacheBase<Traits>::CounterReport(GPUVAddr addr, QueryType counter_type
     const bool has_timestamp = True(flags & QueryPropertiesFlags::HasTimeout);
     const bool is_fence = True(flags & QueryPropertiesFlags::IsAFence);
     const auto requested_type = counter_type;
-    static const GPUVAddr watch = [] {
-        const char* value = std::getenv("EDEN_NX2_SEM_WATCH");
-        return value ? GPUVAddr{std::strtoull(value, nullptr, 16)} : GPUVAddr{};
-    }();
-    if (static const bool trace = std::getenv("EDEN_NX2_QUERY_TRACE") != nullptr;
+    static const GPUVAddr watch = GPUVAddr{Common::Env::Number<u64>("EDEN_NX2_SEM_WATCH", 0, 16)};
+    if (static const bool trace = Common::Env::IsSet("EDEN_NX2_QUERY_TRACE");
         trace || (watch != 0 && (addr & ~GPUVAddr{0xf}) == watch)) {
         LOG_INFO(HW_GPU, "nx2 report addr={:#x} type={} flags={:#x} payload={:#x} as={} device={:#x}", addr,
                  static_cast<u32>(counter_type), static_cast<u32>(flags), payload, gpu_memory->GetID(),

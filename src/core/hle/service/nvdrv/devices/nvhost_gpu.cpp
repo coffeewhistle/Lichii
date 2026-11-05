@@ -13,6 +13,7 @@
 #include <cstring>
 #include <vector>
 #include "common/assert.h"
+#include "common/env.h"
 #include "common/logging.h"
 #include "core/core.h"
 #include "core/hle/kernel/k_process.h"
@@ -430,7 +431,7 @@ NvResult nvhost_gpu::SubmitGPFIFOImpl(IoctlSubmitGpfifo& params, Tegra::CommandL
             LOG_TRACE(Service_NVDRV, "nx2 GPFIFO entry raw={:#018x} addr={:#x} size={:#x}", entry.raw,
                      entry.addr.Value(), entry.size.Value());
         }
-        static const bool check = std::getenv("EDEN_NX2_PB_CHECK") != nullptr;
+        static const bool check = Common::Env::IsSet("EDEN_NX2_PB_CHECK");
         if (check) {
             std::vector<u32> words;
             for (const auto& entry : entries.command_lists) {
@@ -445,10 +446,7 @@ NvResult nvhost_gpu::SubmitGPFIFOImpl(IoctlSubmitGpfifo& params, Tegra::CommandL
         // submitted: the end of a frame ran with the next frame's present image as its render
         // target, leaving an image three frames old to be shown. Keep the words as submitted.
         // EDEN_NX2_PB_SNAPSHOT=0: execute from memory.
-        static const bool snapshot = [] {
-            const char* value = std::getenv("EDEN_NX2_PB_SNAPSHOT");
-            return value == nullptr || value[0] != '0';
-        }();
+        static const bool snapshot = Common::Env::Flag("EDEN_NX2_PB_SNAPSHOT", true);
         if (snapshot && channel_state->memory_manager && channel_state->payload) {
             // Before the copy: a suspension during it must count as one after it.
             entries.snapshot_suspensions =
@@ -511,10 +509,7 @@ NvResult nvhost_gpu::SubmitGPFIFOImpl(IoctlSubmitGpfifo& params, Tegra::CommandL
     }
     flags.raw = 0;
 
-    static const bool sync_submit = [] {
-        const char* value = std::getenv("EDEN_NX2_SYNC_SUBMIT");
-        return value != nullptr && value[0] != '0';
-    }();
+    static const bool sync_submit = Common::Env::Flag("EDEN_NX2_SYNC_SUBMIT");
     if (g_nx2_driver && sync_submit && increment > 0) {
         lock.unlock();
         auto& syncpoints = system.Host1x().GetSyncpointManager();

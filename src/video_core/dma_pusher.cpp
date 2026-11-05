@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <cstdio>
 
+#include "common/env.h"
 #include "common/scope_exit.h"
 #include "common/settings.h"
 #include "core/core.h"
@@ -126,7 +127,7 @@ bool DmaPusher::Step() {
         }
         // EDEN_NX2_FETCH_DRAIN=1: wait for the back before every entry, as before the split
         // overlapped the two halves again.
-        static const bool fetch_drain = std::getenv("EDEN_NX2_FETCH_DRAIN") != nullptr;
+        static const bool fetch_drain = Common::Env::IsSet("EDEN_NX2_FETCH_DRAIN");
         if (fetch_drain && g_nx2_ampere.load(std::memory_order_relaxed)) {
             VideoCommon::GpuSplit::Get().Drain(VideoCommon::DrainSite::FetchDrain);
         }
@@ -155,7 +156,7 @@ bool DmaPusher::Step() {
             // main entry after a macro's first word and supplies the remaining parameters in a
             // 5-word subroutine entry. EDEN_NX2_PARK_SPLIT_METHODS restores the old guess (an
             // entry elsewhere is a call that starts clean; resume where the split one ended).
-            static const bool park_split_methods = std::getenv("EDEN_NX2_PARK_SPLIT_METHODS") != nullptr;
+            static const bool park_split_methods = Common::Env::IsSet("EDEN_NX2_PARK_SPLIT_METHODS");
             if (g_nx2_ampere) {
                 if (static u32 split_logs{}; dma_state.method_count != 0 && split_logs < 64) {
                     ++split_logs;
@@ -273,13 +274,10 @@ bool DmaPusher::Step() {
 
 // EDEN_NX2_SEM_WATCH=<gpu address>: log every method whose argument is the low word of an
 // address in the 16 bytes there (finds the engine and method that release a semaphore).
-static const u32 g_semaphore_watch = [] {
-    const char* value = std::getenv("EDEN_NX2_SEM_WATCH");
-    return value ? static_cast<u32>(std::strtoull(value, nullptr, 16)) : 0U;
-}();
+static const u32 g_semaphore_watch = static_cast<u32>(Common::Env::Number<u64>("EDEN_NX2_SEM_WATCH", 0, 16));
 
 // EDEN_NX2_PB_CHECK also keeps the last parsed entries, for DumpCurrentEntry.
-static const bool g_record_parsed_entries = std::getenv("EDEN_NX2_PB_CHECK") != nullptr;
+static const bool g_record_parsed_entries = Common::Env::IsSet("EDEN_NX2_PB_CHECK");
 
 size_t DmaPusher::ProcessCommands(std::span<const CommandHeader> commands, size_t word_offset) {
     for (size_t index = 0; index < commands.size();) {
@@ -793,7 +791,7 @@ void DmaPusher::DumpCurrentEntry(const char* reason) {
     }
     // EDEN_NX2_PB_DUMP=<file>: also write the whole command list (u64 address, u32 size and the
     // current words of every entry, then the current entry index) for offline replay.
-    if (static const char* const path = std::getenv("EDEN_NX2_PB_DUMP");
+    if (static const char* const path = Common::Env::String("EDEN_NX2_PB_DUMP");
         path != nullptr && !dma_pushbuffer.empty()) {
         if (std::FILE* file = std::fopen(path, "wb")) {
             const auto& lists = dma_pushbuffer.front().command_lists;

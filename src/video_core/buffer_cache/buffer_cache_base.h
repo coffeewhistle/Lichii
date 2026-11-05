@@ -24,6 +24,7 @@
 #include <boost/container/small_vector.hpp>
 
 #include "common/common_types.h"
+#include "common/env.h"
 #include "common/spin_recursive_mutex.h"
 #include "common/div_ceil.h"
 #include "common/literals.h"
@@ -580,7 +581,7 @@ private:
     /// instead of ~5 and draw setup ~7% less. EDEN_NX2_BUFFER_DOWNLOADS=0/1 forces it.
     bool AsyncBufferDownloads() const {
         static const int forced = [] {
-            const char* value = std::getenv("EDEN_NX2_BUFFER_DOWNLOADS");
+            const char* value = Common::Env::String("EDEN_NX2_BUFFER_DOWNLOADS");
             return value == nullptr ? -1 : (value[0] == '0' ? 0 : 1);
         }();
         if (forced >= 0) {

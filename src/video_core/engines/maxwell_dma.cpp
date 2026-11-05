@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include "common/algorithm.h"
 #include "common/assert.h"
+#include "common/env.h"
 #include "common/logging.h"
 #include <ranges>
 #include "common/settings.h"
@@ -65,10 +66,7 @@ void MaxwellDMA::CallMultiMethod(Core::System& system, u32 method, const u32* ba
 void MaxwellDMA::Launch() {
     LOG_TRACE(Render_OpenGL, "DMA copy {:#x} -> {:#x}", static_cast<GPUVAddr>(regs.offset_in), GPUVAddr(regs.offset_out));
     // EDEN_NX2_TRACE_DST=<hex>: also log copies writing within 32 MiB above that GPU address.
-    static const u64 trace_destination = [] {
-        const char* value = std::getenv("EDEN_NX2_TRACE_DST");
-        return value != nullptr ? std::strtoull(value, nullptr, 16) : 0ULL;
-    }();
+    static const u64 trace_destination = Common::Env::Number<u64>("EDEN_NX2_TRACE_DST", 0, 16);
     if (trace_destination != 0 && GPUVAddr(regs.offset_out) >= trace_destination &&
         GPUVAddr(regs.offset_out) < trace_destination + (32ULL << 20)) {
         static u32 traced_destination{};
@@ -82,7 +80,7 @@ void MaxwellDMA::Launch() {
                      regs.launch_dma.dst_memory_layout.Value() == LaunchDMA::MemoryLayout::PITCH ? "pitch" : "block");
         }
     }
-    if (static const bool trace = std::getenv("EDEN_NX2_RT_TRACE") != nullptr; trace) {
+    if (static const bool trace = Common::Env::IsSet("EDEN_NX2_RT_TRACE"); trace) {
         static u32 traced{};
         if (traced++ < 64) {
             LOG_INFO(HW_GPU, "nx2 DMA {:#x} -> {:#x} lines={} length={} launch={:#x}",

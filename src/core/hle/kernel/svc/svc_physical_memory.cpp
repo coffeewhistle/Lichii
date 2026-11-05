@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstdlib>
 
+#include "common/env.h"
 #include "core/core.h"
 #include "core/hle/kernel/k_process.h"
 #include "core/hle/kernel/k_system_control.h"
@@ -151,7 +152,7 @@ Result SetUnsafeLimit(Core::System& system, uint64_t limit) {
 
 // EDEN_NX2_MEM_TRACE: log the heap and physical memory requests of a title (diagnostics).
 static bool MemTrace() {
-    static const bool trace = std::getenv("EDEN_NX2_MEM_TRACE") != nullptr;
+    static const bool trace = Common::Env::IsSet("EDEN_NX2_MEM_TRACE");
     return trace;
 }
 

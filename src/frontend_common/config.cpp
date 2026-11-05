@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include "common/fs/fs.h"
 #include "common/fs/path_util.h"
 #include "common/logging.h"
@@ -729,25 +730,30 @@ bool Config::ReadBooleanSetting(const std::string& key, const std::optional<bool
     }
 }
 
+static s64 ParseIntegerOr(const std::string& text, s64 fallback) {
+    s64 parsed{};
+    const char* const last = text.data() + text.size();
+    if (const auto [end, ec] = std::from_chars(text.data(), last, parsed);
+        ec != std::errc{} || end != last) {
+        LOG_WARNING(Config, "Invalid integer '{}' in configuration, using {}", text, fallback);
+        return fallback;
+    }
+    return parsed;
+}
+
 s64 Config::ReadIntegerSetting(const std::string& key, const std::optional<s64> default_value) {
     std::string full_key = GetFullKey(key, false);
     if (!default_value.has_value()) {
-        try {
-            return std::stoll(std::string(config->GetValue(GetSection().c_str(), full_key.c_str(), "0")));
-        } catch (...) {
-            return 0;
-        }
+        return ParseIntegerOr(config->GetValue(GetSection().c_str(), full_key.c_str(), "0"), 0);
     }
 
     s64 result = 0;
     if (config->GetBoolValue(GetSection().c_str(), std::string(full_key).append("\\default").c_str(), true)) {
         result = default_value.value();
     } else {
-        try {
-            result = std::stoll(std::string(config->GetValue(GetSection().c_str(), full_key.c_str(), ToString(default_value.value()).c_str())));
-        } catch (...) {
-            result = default_value.value();
-        }
+        result = ParseIntegerOr(config->GetValue(GetSection().c_str(), full_key.c_str(),
+                                                 ToString(default_value.value()).c_str()),
+                                default_value.value());
     }
     return result;
 }

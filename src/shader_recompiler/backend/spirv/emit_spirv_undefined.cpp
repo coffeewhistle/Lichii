@@ -6,6 +6,7 @@
 
 #include <cstdlib>
 
+#include "common/env.h"
 #include "shader_recompiler/backend/spirv/emit_spirv_instructions.h"
 #include "shader_recompiler/backend/spirv/spirv_emit_context.h"
 
@@ -16,10 +17,7 @@ namespace {
 // writing its colour on some pixels, which AMD blended in as green patches on the road.
 // EDEN_NX2_UNDEF_ZERO=0 emits OpUndef again.
 bool UndefIsZero() {
-    static const bool zero = [] {
-        const char* const value = std::getenv("EDEN_NX2_UNDEF_ZERO");
-        return value == nullptr || value[0] != '0';
-    }();
+    static const bool zero = Common::Env::Flag("EDEN_NX2_UNDEF_ZERO", true);
     return zero;
 }
 } // Anonymous namespace

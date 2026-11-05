@@ -16,6 +16,7 @@
 #include <vector>
 #include <fmt/ranges.h>
 
+#include "common/env.h"
 #include "common/range_sets.inc"
 #include "video_core/buffer_cache/buffer_cache_base.h"
 #include "video_core/buffer_cache/multi_range_refresh.h"
@@ -1943,7 +1944,7 @@ auto BufferCache<P>::Nx2ReadListCopy(DAddr device_addr, std::span<u8> out, bool 
             const Nx2ListPage& entry = it->second;
             if (entry.draw_written) {
                 // EDEN_NX2_CMDPAGE_DRAIN=1: drain and flush for every list on such pages.
-                static const bool always_drain = std::getenv("EDEN_NX2_CMDPAGE_DRAIN") != nullptr;
+                static const bool always_drain = Common::Env::IsSet("EDEN_NX2_CMDPAGE_DRAIN");
                 if (always_drain) {
                     return Nx2ListRead::Unknown;
                 }

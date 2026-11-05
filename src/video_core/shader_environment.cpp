@@ -23,6 +23,7 @@
 #include "common/cityhash.h"
 #include "common/common_types.h"
 #include "common/div_ceil.h"
+#include "common/env.h"
 #include "common/fs/fs.h"
 #include "common/fs/path_util.h"
 #include "common/logging.h"
@@ -364,7 +365,7 @@ Tegra::Texture::TICEntry GenericEnvironment::ReadTextureInfo(GPUVAddr tic_addr, 
     Tegra::Texture::TICEntry entry;
     gpu_memory->ReadBlock(descriptor_addr, &entry, sizeof(entry));
     if (entry.format.Value() == Tegra::Texture::TextureFormat{} &&
-        std::getenv("EDEN_NX2_RENDER_TRACE")) {
+        Common::Env::IsSet("EDEN_NX2_RENDER_TRACE")) {
         static std::atomic<u32> traces{};
         if (traces.fetch_add(1, std::memory_order_relaxed) < 64) {
             LOG_WARNING(HW_GPU,
@@ -482,7 +483,7 @@ std::shared_ptr<const LoweredNativeCode> GenericEnvironment::LowerNativeCode(u32
         native.push_back(instruction);
         const auto status = capture.Observe(instruction, index);
         if (status == Shader::Ampere::ProgramCaptureState::Result::InvalidTarget) {
-            if (const char* dir = std::getenv("EDEN_NX2_SHADER_DUMP")) {
+            if (const char* dir = Common::Env::String("EDEN_NX2_SHADER_DUMP")) {
                 const auto path = fmt::format("{}/rejected-{:x}.bin", dir, program_base + native_header_size);
                 if (std::FILE* file = std::fopen(path.c_str(), "wb")) {
                     std::fwrite(native.data(), sizeof(Instruction), std::min<size_t>(native.size(), 4096), file);
@@ -521,7 +522,7 @@ std::shared_ptr<const LoweredNativeCode> GenericEnvironment::LowerNativeCode(u32
     // EDEN_NX2_REJECT=<hex address>,...: treat these programs as rejected (to find which newly
     // lowered program changes a game's behaviour without rebuilding).
     if (static const std::string reject_list = [] {
-            const char* text = std::getenv("EDEN_NX2_REJECT");
+            const char* text = Common::Env::String("EDEN_NX2_REJECT");
             return text ? "," + std::string{text} + "," : std::string{};
         }();
         !reject_list.empty() &&
@@ -530,7 +531,7 @@ std::shared_ptr<const LoweredNativeCode> GenericEnvironment::LowerNativeCode(u32
     }
     // EDEN_NX2_SHADER_DUMP=<dir>: keep every captured native program (named by its key) so the
     // lowering can be tested offline against all of a game's shaders.
-    if (static const char* const dump_directory = std::getenv("EDEN_NX2_SHADER_DUMP");
+    if (static const char* const dump_directory = Common::Env::String("EDEN_NX2_SHADER_DUMP");
         dump_directory != nullptr) {
         const auto folder = std::filesystem::path{dump_directory};
         const auto path = folder / fmt::format("{:016x}-{}-{:x}.bin", Shader::Ampere::NativeProgramKey(native),
@@ -561,7 +562,7 @@ std::shared_ptr<const LoweredNativeCode> GenericEnvironment::LowerNativeCode(u32
         }
     }
     if (!lowered) {
-        if (const char* directory = std::getenv("EDEN_NATIVE_SHADER_OVERRIDE_DIR")) {
+        if (const char* directory = Common::Env::String("EDEN_NATIVE_SHADER_OVERRIDE_DIR")) {
             const auto key = fmt::format("{:016x}", Shader::Ampere::NativeProgramKey(native));
             const auto folder = std::filesystem::path{directory};
             std::filesystem::create_directories(folder);
@@ -641,7 +642,7 @@ std::shared_ptr<const LoweredNativeCode> GenericEnvironment::LowerNativeCode(u32
     // EDEN_NX2_REJECT_HASH=<hash>,...: like EDEN_NX2_REJECT, but by native program key (shader
     // dump file names) or shader hash (frame dump "shaders"), which stay the same between runs.
     if (static const std::string reject_hashes = [] {
-            const char* text = std::getenv("EDEN_NX2_REJECT_HASH");
+            const char* text = Common::Env::String("EDEN_NX2_REJECT_HASH");
             std::string list = text ? "," + std::string{text} + "," : std::string{};
             std::ranges::transform(list, list.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
             return list;
@@ -671,7 +672,7 @@ GraphicsEnvironment::GraphicsEnvironment(Tegra::Engines::Maxwell3D& maxwell3d_,
     const auto& regs{maxwell3d->regs};
     const bool native{maxwell3d->GetNativeMacroEngine().native_turing};
     static const bool geometry_enabled = [] {
-        const char* value = std::getenv("EDEN_NX2_EXPERIMENTAL_GEOMETRY");
+        const char* value = Common::Env::String("EDEN_NX2_EXPERIMENTAL_GEOMETRY");
         return !value || std::string_view{value} != "0";
     }();
     const bool geometry{native && program == Maxwell::ShaderType::Geometry && geometry_enabled};
@@ -687,7 +688,7 @@ GraphicsEnvironment::GraphicsEnvironment(Tegra::Engines::Maxwell3D& maxwell3d_,
             sph.common0.shader_type == static_cast<u32>(program);
         if (program != Maxwell::ShaderType::VertexB && program != Maxwell::ShaderType::Pixel &&
             !geometry && !mesh_slot && !tessellation) {
-            if (const char* directory = std::getenv("EDEN_NX2_SHADER_DUMP"); directory &&
+            if (const char* directory = Common::Env::String("EDEN_NX2_SHADER_DUMP"); directory &&
                 gpu_memory->IsFullyMappedRange(program_base, 128)) {
                 constexpr u32 MaxCaptureInstructions = 4096;
                 std::array<u8, 128> header{};
@@ -741,7 +742,7 @@ GraphicsEnvironment::GraphicsEnvironment(Tegra::Engines::Maxwell3D& maxwell3d_,
             }
             throw Shader::RuntimeError("Unsupported native graphics shader stage {}", static_cast<u32>(program));
         }
-        if (std::getenv("EDEN_NATIVE_DRAW_DIAGNOSTICS")) {
+        if (Common::Env::IsSet("EDEN_NATIVE_DRAW_DIAGNOSTICS")) {
             const u32 native_stage = program == Maxwell::ShaderType::Pixel ? 4 :
                                      program == Maxwell::ShaderType::Geometry ? 3 :
                                      program == Maxwell::ShaderType::Tessellation ? 2 :
@@ -800,7 +801,7 @@ GraphicsEnvironment::GraphicsEnvironment(Tegra::Engines::Maxwell3D& maxwell3d_,
         }
     }
     if (native) {
-        if (!lowered_native_ && std::getenv("EDEN_NX2_SHADER_DUMP") &&
+        if (!lowered_native_ && Common::Env::IsSet("EDEN_NX2_SHADER_DUMP") &&
             (stage == Shader::Stage::TessellationControl || stage == Shader::Stage::TessellationEval)) {
             LOG_INFO(Shader,
                      "Native tessellation context at {:#x}: stage={} domain={} spacing={} output={} patch_vertices={}",
@@ -957,7 +958,7 @@ Shader::TexturePixelFormat ComputeEnvironment::ReadTexturePixelFormat(u32 handle
     const Shader::TexturePixelFormat result(ConvertTexturePixelFormat(entry));
     const bool inserted{texture_pixel_formats.emplace(handle, result).second};
     if (inserted && result == Shader::TexturePixelFormat::R16_FLOAT &&
-        kepler_compute->IsNativeMode() && std::getenv("EDEN_NATIVE_DRAW_DIAGNOSTICS")) {
+        kepler_compute->IsNativeMode() && Common::Env::IsSet("EDEN_NATIVE_DRAW_DIAGNOSTICS")) {
         const auto pair{Tegra::Texture::TexturePair(handle, qmd.linked_tsc != 0)};
         const u32 index{Tegra::Texture::TextureHeaderIndex(pair.first, regs.tic.limit,
                                                         gpu_memory->UsesNativeTiling())};

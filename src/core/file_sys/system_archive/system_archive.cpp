@@ -6,6 +6,7 @@
 
 #include <cstdlib>
 
+#include "common/env.h"
 #include "common/logging.h"
 #include "core/file_sys/romfs.h"
 #include "core/file_sys/system_archive/mii_model.h"
@@ -84,10 +85,7 @@ VirtualFile SynthesizeSystemArchive(const u64 title_id) {
         // Switch 2 system data (ids 04...) is not installed with Switch 1 firmware, and titles
         // abort when it cannot be mounted (Nintendo Switch Sports Resort, 0400000000000849):
         // serve an empty archive. EDEN_NX2_EMPTY_SYSTEM_DATA=0 fails the request instead.
-        static const bool empty_nx2 = [] {
-            const char* setting = std::getenv("EDEN_NX2_EMPTY_SYSTEM_DATA");
-            return setting == nullptr || setting[0] != '0';
-        }();
+        static const bool empty_nx2 = Common::Env::Flag("EDEN_NX2_EMPTY_SYSTEM_DATA", true);
         if (empty_nx2 && (title_id >> 56) == 0x04) {
             LOG_WARNING(Service_FS, "Empty archive for Switch 2 system data {:#016x}", title_id);
             return CreateRomFS(std::make_shared<VectorVfsDirectory>());

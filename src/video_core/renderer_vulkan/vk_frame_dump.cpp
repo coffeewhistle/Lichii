@@ -10,6 +10,7 @@
 
 #include <fmt/format.h>
 
+#include "common/env.h"
 #include "common/logging.h"
 #include "common/settings.h"
 #include "common/stb.h"
@@ -182,26 +183,34 @@ std::string JsonArray(std::span<T> values) {
 FrameDump::FrameDump(const Device& device_, MemoryAllocator& memory_allocator_,
                      Scheduler& scheduler_)
     : device{device_}, memory_allocator{memory_allocator_}, scheduler{scheduler_} {
-    const char* const dir = std::getenv("EDEN_NX2_FRAME_DUMP");
+    const char* const dir = Common::Env::String("EDEN_NX2_FRAME_DUMP");
     if (!dir || *dir == '\0') {
         return;
     }
     enabled = true;
-    const char* const sampled_value = std::getenv("EDEN_NX2_FRAME_DUMP_SAMPLED");
+    const char* const sampled_value = Common::Env::String("EDEN_NX2_FRAME_DUMP_SAMPLED");
     sampled = sampled_value && *sampled_value != '\0' && *sampled_value != '0';
     directory = dir;
     start = std::chrono::steady_clock::now();
-    const char* const at = std::getenv("EDEN_NX2_FRAME_DUMP_AT");
+    const char* const at = Common::Env::String("EDEN_NX2_FRAME_DUMP_AT");
     const std::string_view value = at ? at : "60";
     if (value == "file") {
         // Captures once <dir>/capture.now exists, so a frame can be picked while playing.
         trigger_file = directory / "capture.now";
         trigger_seconds = std::numeric_limits<double>::infinity();
     } else if (value.ends_with('f')) {
-        trigger_frame = std::strtoull(value.data(), nullptr, 10);
+        char* end = nullptr;
+        trigger_frame = std::strtoull(value.data(), &end, 10);
+        if (end != value.data() + value.size() - 1) {
+            LOG_WARNING(Render_Vulkan, "EDEN_NX2_FRAME_DUMP_AT={}: not a frame number", value);
+        }
         trigger_seconds = std::numeric_limits<double>::infinity();
     } else {
-        trigger_seconds = std::strtod(value.data(), nullptr);
+        char* end = nullptr;
+        trigger_seconds = std::strtod(value.data(), &end);
+        if (end != value.data() + value.size()) {
+            LOG_WARNING(Render_Vulkan, "EDEN_NX2_FRAME_DUMP_AT={}: not a number of seconds", value);
+        }
     }
     LOG_INFO(Render_Vulkan, "Frame dump armed: dir={} at={}", directory.string(), value);
 }

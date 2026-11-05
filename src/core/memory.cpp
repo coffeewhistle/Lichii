@@ -21,6 +21,7 @@
 #include "common/assert.h"
 #include "common/atomic_ops.h"
 #include "common/common_types.h"
+#include "common/env.h"
 #include "common/heap_tracker.h"
 #include "common/logging.h"
 #include "common/page_table.h"
@@ -504,7 +505,7 @@ struct Memory::Impl {
             // EDEN_NX2_NO_REACTIVE=1 drops the read traps on Switch 2 programs. Opt-in: without
             // them a CPU read of GPU-written memory can see stale data.
             static const bool nx2_no_reactive = [] {
-                const char* value = std::getenv("EDEN_NX2_NO_REACTIVE");
+                const char* value = Common::Env::String("EDEN_NX2_NO_REACTIVE");
                 return value != nullptr && value[0] == '1';
             }();
             const bool reactive_flushing =
@@ -585,10 +586,7 @@ struct Memory::Impl {
     /// (EDEN_NX2_READ_TRAPS=0 turns them off). Under NCE every fault is taken as a write, so they
     /// are not used there.
     bool ReadTrapsEnabled() const {
-        static const bool disabled = [] {
-            const char* value = std::getenv("EDEN_NX2_READ_TRAPS");
-            return value != nullptr && value[0] == '0';
-        }();
+        static const bool disabled = !Common::Env::Flag("EDEN_NX2_READ_TRAPS", true);
         return !disabled && current_page_table->fastmem_arena &&
                !Settings::values.use_reactive_flushing.GetValue() &&
                Settings::values.cpu_backend.GetValue() != Settings::CpuBackend::Nce;

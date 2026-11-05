@@ -7,6 +7,7 @@
 #pragma once
 
 #include <algorithm>
+#include <charconv>
 #include <limits>
 #include <optional>
 #include <stdexcept>
@@ -14,6 +15,7 @@
 #include <type_traits>
 #include <fmt/ranges.h>
 #include "common/common_types.h"
+#include "common/logging.h"
 #include "common/settings_common.h"
 #include "common/settings_enums.h"
 
@@ -199,13 +201,29 @@ public:
             if constexpr (std::is_same_v<Type, std::string>) {
                 this->SetValue(input);
             } else if constexpr (std::is_same_v<Type, std::optional<u32>>) {
-                this->SetValue(u32(std::stoul(input)));
+                u32 parsed{};
+                const char* const last = input.data() + input.size();
+                if (const auto [end, ec] = std::from_chars(input.data(), last, parsed);
+                    ec != std::errc{} || end != last) {
+                    LOG_WARNING(Config, "Invalid value '{}' for setting, keeping the current value",
+                                input);
+                    return;
+                }
+                this->SetValue(parsed);
             } else if constexpr (std::is_same_v<Type, bool>) {
                 this->SetValue(input == "true");
             } else if constexpr (std::is_same_v<Type, float>) {
                 this->SetValue(std::stof(input));
             } else {
-                this->SetValue(Type(std::stoll(input)));
+                s64 parsed{};
+                const char* const last = input.data() + input.size();
+                if (const auto [end, ec] = std::from_chars(input.data(), last, parsed);
+                    ec != std::errc{} || end != last) {
+                    LOG_WARNING(Config, "Invalid value '{}' for setting, keeping the current value",
+                                input);
+                    return;
+                }
+                this->SetValue(Type(parsed));
             }
         } catch (std::invalid_argument&) {
             this->SetValue(this->GetDefault());

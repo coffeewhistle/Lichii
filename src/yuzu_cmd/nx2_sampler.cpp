@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "yuzu_cmd/nx2_sampler.h"
+#include "common/env.h"
 
 #ifdef _WIN32
 
@@ -311,11 +312,11 @@ void Run(std::vector<std::string> patterns, double start, double seconds, std::s
 } // Anonymous namespace
 
 void StartFromEnvironment() {
-    const char* names = std::getenv("EDEN_NX2_SAMPLE");
+    const char* names = Common::Env::String("EDEN_NX2_SAMPLE");
     if (names == nullptr || *names == '\0') {
         return;
     }
-    const char* out = std::getenv("EDEN_NX2_SAMPLE_OUT");
+    const char* out = Common::Env::String("EDEN_NX2_SAMPLE_OUT");
     std::thread{Run, SplitNames(names), EnvSeconds("EDEN_NX2_SAMPLE_START", 60.0),
                 EnvSeconds("EDEN_NX2_SAMPLE_SECONDS", 30.0),
                 std::string{out != nullptr ? out : "nx2_samples.txt"}}

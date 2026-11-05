@@ -10,6 +10,7 @@
 #include <cstring>
 #include <type_traits>
 
+#include "common/env.h"
 #include "core/arm/arm_interface.h"
 #include "core/core.h"
 #include "core/hle/kernel/k_process.h"
@@ -2513,11 +2514,17 @@ void Call(Core::System& system, u32 imm) {
     // Set EDEN_NX2_SVC_TRACE=1 to log every SVC with its arguments and results, or
     // EDEN_NX2_SVC_TRACE=<first>:<last> for presents first..last only (a frame-time profile).
     static const std::pair<u64, u64> trace_range = [] {
-        const char* text = std::getenv("EDEN_NX2_SVC_TRACE");
+        const char* text = Common::Env::String("EDEN_NX2_SVC_TRACE");
         if (text == nullptr) return std::pair<u64, u64>{1, 0};
         const char* colon = std::strchr(text, ':');
         if (colon == nullptr) return std::pair<u64, u64>{0, ~u64{}};
-        return std::pair<u64, u64>{std::strtoull(text, nullptr, 10), std::strtoull(colon + 1, nullptr, 10)};
+        char *first_end = nullptr, *last_end = nullptr;
+        const std::pair<u64, u64> range{std::strtoull(text, &first_end, 10),
+                                        std::strtoull(colon + 1, &last_end, 10)};
+        if (first_end != colon || *last_end != '\0') {
+            LOG_WARNING(Kernel_SVC, "EDEN_NX2_SVC_TRACE={}: expected <first>:<last>", text);
+        }
+        return range;
     }();
     const u64 presents = Core::g_nx2_present_count.load(std::memory_order_relaxed);
     const bool svc_trace = presents >= trace_range.first && presents <= trace_range.second;

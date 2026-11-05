@@ -20,6 +20,7 @@
 
 #include "video_core/renderer_vulkan/vk_query_cache.h"
 
+#include "common/env.h"
 #include "common/logging.h"
 #include "common/settings.h"
 #include "common/dkb_cpu_trace.h"
@@ -185,10 +186,7 @@ bool Scheduler::DeferFlush() {
     // kept the Vulkan worker busy submitting. Batched within 500 us: ~10-15% more fps there.
     // Command list copies after dispatches were ~9,000 more a second, of which the front waited
     // for about 5%.
-    static const s64 interval_us = [] {
-        const char* value = std::getenv("EDEN_NX2_FENCE_FLUSH_US");
-        return value == nullptr ? s64{500} : static_cast<s64>(std::atoll(value));
-    }();
+    static const s64 interval_us = Common::Env::Number<s64>("EDEN_NX2_FENCE_FLUSH_US", 500);
     if (interval_us <= 0 || !VideoCommon::GpuSplit::OnBackThread() ||
         std::chrono::steady_clock::now() - last_flush >= std::chrono::microseconds{interval_us}) {
         return false;

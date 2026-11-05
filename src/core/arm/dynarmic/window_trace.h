@@ -10,6 +10,7 @@
 #include <optional>
 #include <string_view>
 #include "common/common_types.h"
+#include "common/env.h"
 
 namespace Kernel {
 class KProcess;
@@ -23,7 +24,7 @@ constexpr bool EnabledValue(const char* value) {
 }
 
 inline bool Enabled() {
-    static const bool enabled = EnabledValue(std::getenv("EDEN_STARFOX_WINDOW_TRACE"));
+    static const bool enabled = EnabledValue(Common::Env::String("EDEN_STARFOX_WINDOW_TRACE"));
     return enabled;
 }
 

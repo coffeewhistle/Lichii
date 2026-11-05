@@ -6,6 +6,7 @@
 
 #include <cstdlib>
 
+#include "common/env.h"
 #include "core/core.h"
 #include "core/core_timing.h"
 #include "core/hle/kernel/k_memory_manager.h"
@@ -348,7 +349,7 @@ Result GetInfo64(Core::System& system, uint64_t* out, InfoType info_type, Handle
                  uint64_t info_subtype) {
     const Result result = GetInfo(system, out, info_type, handle, info_subtype);
     // EDEN_NX2_MEM_TRACE: log the memory layout and size queries of a title (diagnostics).
-    static const bool trace = std::getenv("EDEN_NX2_MEM_TRACE") != nullptr;
+    static const bool trace = Common::Env::IsSet("EDEN_NX2_MEM_TRACE");
     const u32 type = static_cast<u32>(info_type);
     if (static u32 logs{}; trace && logs < 200 && (type <= 7 || (type >= 12 && type <= 33))) {
         ++logs;

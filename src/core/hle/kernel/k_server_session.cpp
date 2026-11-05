@@ -13,6 +13,7 @@
 
 #include "common/assert.h"
 #include "common/common_types.h"
+#include "common/env.h"
 #include "common/logging.h"
 #include "common/scope_exit.h"
 #include "common/scratch_buffer.h"
@@ -1246,10 +1247,7 @@ namespace {
 // When another guest thread got the client's core, give it up to this long before the reply
 // wakes the client. EDEN_NX2_IPC_MIN_US=<n> changes it; 0 turns it off.
 void HoldHleReply(KernelCore& kernel, KThread* client_thread) {
-    static const auto hold = std::chrono::microseconds{[] {
-        const char* text = std::getenv("EDEN_NX2_IPC_MIN_US");
-        return text ? std::strtoll(text, nullptr, 10) : 50LL;
-    }()};
+    static const auto hold = std::chrono::microseconds{Common::Env::Number<s64>("EDEN_NX2_IPC_MIN_US", 50)};
     if (hold.count() <= 0) {
         return;
     }

@@ -26,6 +26,7 @@
 #include "video_core/vulkan_common/vulkan_device.h"
 #include "video_core/vulkan_common/vulkan_wrapper.h"
 #include "video_core/gpu_logging/gpu_logging.h"
+#include "common/env.h"
 #include "common/logging.h"
 #include "common/settings.h"
 #include "shader_recompiler/exception.h"
@@ -78,10 +79,9 @@ struct UpscalerTrace {
 UpscalerTrace& GetUpscalerTrace() {
     static UpscalerTrace trace{[] {
         const auto number{[](const char* name, u64 fallback) {
-            const char* const value{std::getenv(name)};
-            return value ? u64{std::strtoull(value, nullptr, 10)} : fallback;
+            return Common::Env::Number<u64>(name, fallback);
         }};
-        const char* const enabled{std::getenv("EDEN_NX2_UPSCALER_TRACE")};
+        const char* const enabled{Common::Env::String("EDEN_NX2_UPSCALER_TRACE")};
         return UpscalerTrace{
             .enabled = enabled != nullptr && *enabled != '\0' && *enabled != '0',
             .first_frame = number("EDEN_NX2_UPSCALER_TRACE_FRAME", 600),
@@ -433,7 +433,7 @@ bool ComputePipeline::Configure(Tegra::Engines::KeplerCompute& kepler_compute,
     }
 
     static const bool record_sampled = [] {
-        const char* const value = std::getenv("EDEN_NX2_FRAME_DUMP_SAMPLED");
+        const char* const value = Common::Env::String("EDEN_NX2_FRAME_DUMP_SAMPLED");
         return value && *value != '\0' && *value != '0';
     }();
     if (record_sampled) {
