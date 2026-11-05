@@ -385,6 +385,7 @@ public:
     ~INx2GpuSession() override {
         // Waits for a backing the GPU thread may be doing.
         Tegra::Nx2SetSparseBacking({});
+        FreeReleasedRegionsAtExit();
         for (auto* event : m_events) {
             if (event != nullptr) {
                 m_context.CloseEvent(event);
@@ -792,11 +793,12 @@ private:
         return true;
     }
 
-    // Returns the pages of destroyed regions the GPU thread is done with to the kernel.
-    void FreeReleasedRegions() {
+    // Returns the pages of destroyed regions the GPU thread is done with to the kernel; with
+    // `force`, also those it may not be done with yet.
+    void FreeReleasedRegions(bool force = false) {
         auto* const process = system.ApplicationProcess();
         std::erase_if(m_released_regions, [&](ReleasedRegion& released) {
-            if (!released.done->load(std::memory_order_acquire)) {
+            if (!force && !released.done->load(std::memory_order_acquire)) {
                 return false;
             }
             auto& region = released.region;
@@ -811,6 +813,53 @@ private:
             m_gpu_only_bytes -= region.size;
             return true;
         });
+    }
+
+    // Session teardown: waits (bounded) for the GPU thread to pass the released regions, then
+    // frees them all. When emulation stops, the GPU thread is stopped before the services close
+    // and never gets there; their pages are freed anyway rather than lost.
+    void FreeReleasedRegionsAtExit() {
+        {
+            std::scoped_lock lk{m_region_mutex};
+            FreeReleasedRegions();
+            if (m_released_regions.empty()) {
+                return;
+            }
+        }
+        if (system.IsPoweredOn()) {
+            struct Wake {
+                std::mutex mutex;
+                std::condition_variable cv;
+                bool done{};
+            };
+            auto wake = std::make_shared<Wake>();
+            // Queued after the RunInOrder that set each pending `done`, so it runs after them.
+            system.GPU().RunInOrder([wake] {
+                {
+                    std::scoped_lock lk{wake->mutex};
+                    wake->done = true;
+                }
+                wake->cv.notify_all();
+            });
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
+            std::unique_lock lk{wake->mutex};
+            while (!wake->done && system.IsPoweredOn()) {
+                const auto now = std::chrono::steady_clock::now();
+                if (now >= deadline) {
+                    break;
+                }
+                wake->cv.wait_for(lk, (std::min<std::chrono::steady_clock::duration>)(
+                                          deadline - now, std::chrono::milliseconds{50}));
+            }
+        }
+        std::scoped_lock lk{m_region_mutex};
+        FreeReleasedRegions();
+        if (!m_released_regions.empty()) {
+            LOG_WARNING(Service, "nx2:gpu freeing {} released GPU-only backings the GPU thread has "
+                                 "not passed",
+                        m_released_regions.size());
+            FreeReleasedRegions(true);
+        }
     }
 
     struct MappedBacking {
