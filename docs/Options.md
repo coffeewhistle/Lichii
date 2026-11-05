@@ -48,6 +48,11 @@ These options control dependencies.
   - Only available on Linux
 - `ENABLE_DEBUG_TOOLS` (OFF) Enables debugging and development tools, see [tools](../tools/README.md).
 - `ENABLE_WERROR` (ON) Enables warnings as errors (-Werror).
+- `ENABLE_ASAN` (OFF) Builds with AddressSanitizer and UndefinedBehaviorSanitizer.
+- `ENABLE_TSAN` (OFF) Builds with ThreadSanitizer.
+  - Set one or the other, not both. GCC and Clang only.
+  - Use TSAN to chase races between the GPU thread split, the video decode thread and the syncpoint poller.
+  - Run the tests under either sanitizer by configuring with `-DYUZU_TESTS=ON`, then running `ctest`.
 
 ### Flavors
 

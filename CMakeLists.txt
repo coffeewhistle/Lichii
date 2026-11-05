@@ -83,6 +83,8 @@ cmake_dependent_option(YUZU_USE_BUNDLED_QT "Download bundled Qt binaries" "${MSV
 
 option(ENABLE_DEBUG_TOOLS "Enable debugging tools (maxwell disassembler, SPIRV translator, etc)" OFF)
 option(ENABLE_WERROR "Enable -Werror diagnostics" ON)
+option(ENABLE_ASAN "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+option(ENABLE_TSAN "Build with ThreadSanitizer" OFF)
 
 # Handle specific -Werror downgrades safely across platforms
 if(ENABLE_WERROR)
@@ -100,6 +102,23 @@ if(ENABLE_WERROR)
         # Windows Specifically
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /wd4100 /wd4101")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4100 /wd4101")
+    endif()
+endif()
+
+# Sanitizers. They are mutually exclusive, and only GCC and Clang accept these flags.
+if (ENABLE_ASAN AND ENABLE_TSAN)
+    message(FATAL_ERROR "ENABLE_ASAN and ENABLE_TSAN are mutually exclusive")
+endif()
+
+if (ENABLE_ASAN OR ENABLE_TSAN)
+    if (MSVC AND NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        message(WARNING "ENABLE_ASAN/ENABLE_TSAN are only supported with GCC and Clang")
+    elseif (ENABLE_ASAN)
+        add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+        add_link_options(-fsanitize=address,undefined)
+    else()
+        add_compile_options(-fsanitize=thread -fno-omit-frame-pointer)
+        add_link_options(-fsanitize=thread)
     endif()
 endif()
 
