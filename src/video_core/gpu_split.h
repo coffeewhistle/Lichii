@@ -69,7 +69,7 @@ public:
     }
     /// Whether the front runs the engines' macros (EDEN_NX2_SPLIT=2).
     [[nodiscard]] bool FrontMacros() const {
-        return front_macros;
+        return s.front_macros;
     }
 
     /// Whether the calling thread is the back.
@@ -160,7 +160,7 @@ public:
 
     /// Compute or copy work was just sent: what can write GPU-written command lists.
     void NoteWriter() {
-        last_writer_position = write_position;
+        s.last_writer_position = s.write_position;
     }
     /// Waits until the back executed the compute and copy work sent so far (not what came after).
     /// Returns whether any of it was still queued.
@@ -169,7 +169,7 @@ public:
     /// bit; semaphore acquires drain): the guest's GPU work before it is complete before the
     /// commands after it are fetched.
     void NoteSync() {
-        last_sync_position = write_position;
+        s.last_sync_position = s.write_position;
     }
     /// Waits until the back executed the work sent before the last NoteSync. Returns whether any
     /// of it was still queued.
@@ -199,23 +199,23 @@ private:
 
     /// Room for an entry of `words` at the write position (never across the ring's end).
     u64* Reserve(size_t words) {
-        const size_t index = write_position & RingMask;
-        if (index + words <= RingWords && write_position + words - consumed_cache <= RingWords)
+        const size_t index = s.write_position & RingMask;
+        if (index + words <= RingWords && s.write_position + words - s.consumed_cache <= RingWords)
             [[likely]] {
-            return &ring[index];
+            return &s.ring[index];
         }
         return ReserveSlow(words);
     }
     u64* ReserveSlow(size_t words);
     void Commit(size_t words) {
-        write_position += words;
-        if (write_position - published_local >= publish_every) {
+        s.write_position += words;
+        if (s.write_position - s.published_local >= s.publish_every) {
             Publish();
         }
     }
     void WaitForSpace(size_t words);
     void SelectEngine(Tegra::Engines::EngineInterface* engine) {
-        if (engine != front_engine) [[unlikely]] {
+        if (engine != s.front_engine) [[unlikely]] {
             SwitchEngine(engine);
         }
     }
@@ -224,24 +224,32 @@ private:
 
     void BackLoop(std::stop_token stop_token);
     size_t Execute(const u64* entry);
+    /// Back to the state before the first MaybeStart (after the back thread joined).
+    void ResetSession();
 
-    Core::System* system{};
     bool active{};
-    bool front_macros{};
-    std::unique_ptr<u64[]> ring;
 
-    // Front side.
-    u64 write_position{};
-    u64 last_writer_position{};
-    u64 last_sync_position{};
-    u64 published_local{};
-    u64 consumed_cache{};
-    /// Words between publishes: small right after a drain, while the back has nothing to do.
-    size_t publish_every{PublishEvery};
-    Tegra::Engines::EngineInterface* front_engine{};
+    /// What one run of the back thread sets up and advances. Stop resets it as a whole
+    /// (ResetSession): a new per-session field goes here, or, if atomic, into ResetSession.
+    struct Session {
+        Core::System* system{};
+        bool front_macros{};
+        std::unique_ptr<u64[]> ring;
 
-    // Back side.
-    Tegra::Engines::EngineInterface* back_engine{};
+        // Front side.
+        u64 write_position{};
+        u64 last_writer_position{};
+        u64 last_sync_position{};
+        u64 published_local{};
+        u64 consumed_cache{};
+        /// Words between publishes: small right after a drain, while the back has nothing to do.
+        size_t publish_every{PublishEvery};
+        Tegra::Engines::EngineInterface* front_engine{};
+
+        // Back side.
+        Tegra::Engines::EngineInterface* back_engine{};
+    };
+    Session s;
 
     static GpuSplit instance;
     static inline thread_local bool on_back_thread{};

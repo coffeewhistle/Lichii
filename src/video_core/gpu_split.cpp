@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <thread>
 
@@ -111,15 +112,15 @@ void GpuSplit::MaybeStart(Core::System& system_) {
     if (active || !allowed) {
         return;
     }
-    system = &system_;
+    s.system = &system_;
     check_owner = std::getenv("EDEN_NX2_SPLIT_CHECK") != nullptr;
-    ring = std::make_unique<u64[]>(RingWords);
+    s.ring = std::make_unique<u64[]>(RingWords);
     back_thread = std::jthread([this](std::stop_token stop_token) { BackLoop(stop_token); });
     active = true;
     const char* jit = std::getenv("EDEN_NX2_MME_JIT");
-    front_macros = mode == '2' && (jit == nullptr || jit[0] != '0');
+    s.front_macros = mode == '2' && (jit == nullptr || jit[0] != '0');
     LOG_INFO(HW_GPU, "GPU thread split: engine methods run on a second thread{}",
-             front_macros ? ", macros on the first" : "");
+             s.front_macros ? ", macros on the first" : "");
 }
 
 void GpuSplit::Stop() {
@@ -131,48 +132,55 @@ void GpuSplit::Stop() {
     wake.notify_one();
     back_thread.join();
     active = false;
+    // The join orders the back's last stores before these loads.
+    const u64 published_position = published.load(std::memory_order_relaxed);
+    const u64 consumed_position = consumed.load(std::memory_order_relaxed);
+    if (published_position != consumed_position || s.write_position != published_position) {
+        LOG_WARNING(HW_GPU,
+                    "GPU thread split: stopped with work left unexecuted (written {}, published "
+                    "{}, consumed {})",
+                    s.write_position, published_position, consumed_position);
+    }
     // The split is static and outlives the emulation session. The next session's back thread
     // starts reading at 0: with the old positions kept it skipped through the new, empty ring a
     // wrap at a time and never reached the old write position (the next game's first GPU work
     // never ran, it waited on its syncpoint forever), and the engines it held were freed.
-    ring.reset();
-    write_position = 0;
-    last_writer_position = 0;
-    last_sync_position = 0;
-    published_local = 0;
-    consumed_cache = 0;
-    publish_every = PublishEvery;
-    front_engine = nullptr;
-    back_engine = nullptr;
-    front_macros = false;
+    ResetSession();
+}
+
+void GpuSplit::ResetSession() {
+    s = Session{};
+    // Atomics cannot be assigned as a whole. Relaxed suffices: the back thread joined, and the
+    // next one is started after these stores (thread creation orders them before it).
     published.store(0, std::memory_order_relaxed);
     consumed.store(0, std::memory_order_relaxed);
+    wait_target.store(~u64{0}, std::memory_order_relaxed);
     back_waiting.store(false, std::memory_order_relaxed);
 }
 
 u64* GpuSplit::ReserveSlow(size_t words) {
-    size_t index = write_position & RingMask;
+    size_t index = s.write_position & RingMask;
     if (index + words > RingWords) {
         // Entries never wrap: skip to the start of the ring.
         const size_t rest = RingWords - index;
         WaitForSpace(rest);
-        ring[index] = static_cast<u64>(Kind::Wrap);
-        write_position += rest;
+        s.ring[index] = static_cast<u64>(Kind::Wrap);
+        s.write_position += rest;
         index = 0;
     }
     WaitForSpace(words);
-    return &ring[index];
+    return &s.ring[index];
 }
 
 void GpuSplit::WaitForSpace(size_t words) {
-    if (write_position + words - consumed_cache <= RingWords) {
+    if (s.write_position + words - s.consumed_cache <= RingWords) {
         return;
     }
     Publish();
     Nx2Profile::Scope scope{Nx2Profile::Zone::SplitDrain};
     for (u32 spins = 0;; ++spins) {
-        consumed_cache = consumed.load(std::memory_order_acquire);
-        if (write_position + words - consumed_cache <= RingWords) {
+        s.consumed_cache = consumed.load(std::memory_order_acquire);
+        if (s.write_position + words - s.consumed_cache <= RingWords) {
             return;
         }
         if (spins < 4096) {
@@ -184,12 +192,12 @@ void GpuSplit::WaitForSpace(size_t words) {
 }
 
 void GpuSplit::Publish() {
-    if (published_local == write_position) {
+    if (s.published_local == s.write_position) {
         return;
     }
-    published_local = write_position;
-    publish_every = std::min<size_t>(publish_every * 2, PublishEvery);
-    published.store(write_position, std::memory_order_seq_cst);
+    s.published_local = s.write_position;
+    s.publish_every = std::min<size_t>(s.publish_every * 2, PublishEvery);
+    published.store(s.write_position, std::memory_order_seq_cst);
     if (back_waiting.load(std::memory_order_seq_cst)) {
         wake.fetch_add(1, std::memory_order_seq_cst);
         wake.notify_one();
@@ -197,17 +205,17 @@ void GpuSplit::Publish() {
 }
 
 void GpuSplit::Drain(DrainSite site) {
-    consumed_cache = consumed.load(std::memory_order_acquire);
-    if (consumed_cache == write_position) {
+    s.consumed_cache = consumed.load(std::memory_order_acquire);
+    if (s.consumed_cache == s.write_position) {
         return;
     }
     Publish();
     Nx2Profile::Scope scope{Nx2Profile::Zone::SplitDrain};
     const u64 start = Nx2Profile::Enabled() ? Nx2Profile::Now() : 0;
     for (u32 spins = 0;; ++spins) {
-        consumed_cache = consumed.load(std::memory_order_acquire);
-        if (consumed_cache == write_position) {
-            publish_every = 8;
+        s.consumed_cache = consumed.load(std::memory_order_acquire);
+        if (s.consumed_cache == s.write_position) {
+            s.publish_every = 8;
             Nx2Profile::AddDrain(site, start);
             return;
         }
@@ -220,16 +228,16 @@ void GpuSplit::Drain(DrainSite site) {
 }
 
 bool GpuSplit::WaitForWriters() {
-    return WaitFor(std::min(last_writer_position, write_position), DrainSite::ListWriters);
+    return WaitFor(std::min(s.last_writer_position, s.write_position), DrainSite::ListWriters);
 }
 
 bool GpuSplit::WaitForSync() {
-    return WaitFor(std::min(last_sync_position, write_position), DrainSite::ListSync);
+    return WaitFor(std::min(s.last_sync_position, s.write_position), DrainSite::ListSync);
 }
 
 bool GpuSplit::WaitFor(u64 target, DrainSite site) {
-    consumed_cache = consumed.load(std::memory_order_acquire);
-    if (consumed_cache >= target) {
+    s.consumed_cache = consumed.load(std::memory_order_acquire);
+    if (s.consumed_cache >= target) {
         return false;
     }
     Nx2Profile::Scope scope{Nx2Profile::Zone::WriterWait};
@@ -237,8 +245,8 @@ bool GpuSplit::WaitFor(u64 target, DrainSite site) {
     Publish();
     const u64 start = Nx2Profile::Enabled() ? Nx2Profile::Now() : 0;
     for (u32 spins = 0;; ++spins) {
-        consumed_cache = consumed.load(std::memory_order_acquire);
-        if (consumed_cache >= target) {
+        s.consumed_cache = consumed.load(std::memory_order_acquire);
+        if (s.consumed_cache >= target) {
             wait_target.store(~u64{0}, std::memory_order_relaxed);
             Nx2Profile::AddDrain(site, start);
             return true;
@@ -252,7 +260,7 @@ bool GpuSplit::WaitFor(u64 target, DrainSite site) {
 }
 
 void GpuSplit::SwitchEngine(Tegra::Engines::EngineInterface* engine) {
-    front_engine = engine;
+    s.front_engine = engine;
     u64* const entry = Reserve(2);
     entry[0] = static_cast<u64>(Kind::Engine);
     entry[1] = reinterpret_cast<u64>(engine);
@@ -298,25 +306,25 @@ size_t GpuSplit::Execute(const u64* entry) {
     case Kind::Wrap:
         return 0;
     case Kind::Engine:
-        back_engine = reinterpret_cast<Tegra::Engines::EngineInterface*>(entry[1]);
+        s.back_engine = reinterpret_cast<Tegra::Engines::EngineInterface*>(entry[1]);
         return 2;
     case Kind::Method: {
         const u32 method = static_cast<u32>((head >> 8) & 0xffff);
         const u32 argument = static_cast<u32>(head >> 32);
-        auto* const engine = back_engine;
+        auto* const engine = s.back_engine;
         if ((head & Direct) != 0) {
             Nx2Profile::Scope method_scope{Nx2Profile::Zone::Method};
-            engine->ConsumeSink(*system);
-            engine->CallMethod(*system, method, argument, true);
+            engine->ConsumeSink(*s.system);
+            engine->CallMethod(*s.system, method, argument, true);
         } else if (!engine->execution_mask[method]) {
             engine->method_sink.emplace_back(method, argument);
         } else {
             Nx2Profile::Scope method_scope{Nx2Profile::Zone::Method};
-            engine->ConsumeSink(*system);
+            engine->ConsumeSink(*s.system);
             if ((head & HasSegment) != 0) {
                 engine->current_dma_segment = entry[1];
             }
-            engine->CallMethod(*system, method, argument, (head & IsLast) != 0);
+            engine->CallMethod(*s.system, method, argument, (head & IsLast) != 0);
         }
         return (head & HasSegment) != 0 ? 2 : 1;
     }
@@ -324,13 +332,13 @@ size_t GpuSplit::Execute(const u64* entry) {
         const u32 method = static_cast<u32>((head >> 8) & 0xffff);
         const u32 amount = static_cast<u32>(head >> 32);
         const size_t data = (head & HasSegment) != 0 ? 3 : 2;
-        auto* const engine = back_engine;
+        auto* const engine = s.back_engine;
         Nx2Profile::Scope method_scope{Nx2Profile::Zone::Method};
-        engine->ConsumeSink(*system);
+        engine->ConsumeSink(*s.system);
         if ((head & HasSegment) != 0) {
             engine->current_dma_segment = entry[2];
         }
-        engine->CallMultiMethod(*system, method, reinterpret_cast<const u32*>(entry + data),
+        engine->CallMultiMethod(*s.system, method, reinterpret_cast<const u32*>(entry + data),
                                 amount, static_cast<u32>(entry[1]));
         return data + (amount + 1) / 2;
     }
@@ -350,7 +358,7 @@ void GpuSplit::BackLoop(std::stop_token stop_token) {
     back_running.store(true, std::memory_order_release);
     Common::SetCurrentThreadPriority(Common::ThreadPriority::Critical);
     Common::SetCurrentThreadToPerformanceCores();
-    system->RegisterHostThread();
+    s.system->RegisterHostThread();
 #ifdef _WIN32
     g_back_thread_id.store(GetCurrentThreadId(), std::memory_order_relaxed);
 #endif
@@ -381,7 +389,26 @@ void GpuSplit::BackLoop(std::stop_token stop_token) {
                 // A request made after the hook ran (RequestIdleHook) runs it before sleeping.
                 if (available == read_position && !stop_token.stop_requested() &&
                     !hook_requested.load(std::memory_order_seq_cst)) {
-                    wake.wait(seen, std::memory_order_seq_cst);
+                    if (!check_owner) {
+                        wake.wait(seen, std::memory_order_seq_cst);
+                    } else {
+                        // EDEN_NX2_SPLIT_CHECK: poll for the same change, to report a long wait.
+                        const auto start = std::chrono::steady_clock::now();
+                        bool reported = false;
+                        while (wake.load(std::memory_order_seq_cst) == seen) {
+                            std::this_thread::sleep_for(std::chrono::milliseconds{1});
+                            const auto idle = std::chrono::steady_clock::now() - start;
+                            if (!reported && idle >= std::chrono::seconds{5}) {
+                                reported = true;
+                                LOG_WARNING(HW_GPU,
+                                            "GPU thread split: back idle for {} s waiting at "
+                                            "ring position {}",
+                                            std::chrono::duration_cast<std::chrono::seconds>(idle)
+                                                .count(),
+                                            read_position);
+                            }
+                        }
+                    }
                 }
                 back_waiting.store(false, std::memory_order_relaxed);
                 continue;
@@ -390,7 +417,7 @@ void GpuSplit::BackLoop(std::stop_token stop_token) {
         u64 last_store = read_position;
         while (read_position != available) {
             const size_t index = read_position & RingMask;
-            const size_t size = Execute(&ring[index]);
+            const size_t size = Execute(&s.ring[index]);
             read_position += size != 0 ? size : RingWords - index;
             if (hook_requested.load(std::memory_order_relaxed) &&
                 idle_hook != nullptr) [[unlikely]] {
