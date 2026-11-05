@@ -4,6 +4,7 @@
 // SPDX-FileCopyrightText: Copyright 2018 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <algorithm>
 #include <cinttypes>
 #include <cstring>
 #include <iterator>
@@ -238,6 +239,18 @@ Result FSP_SRV::OpenBisFileSystem(OutInterface<IFileSystem> out_interface,
     // Nintendo only resolves the path against the partition root; an empty or "/" path opens
     // the whole partition, which is the only form homebrew uses.
     if (!sub_path.empty() && sub_path != "/") {
+        // The VFS root check is a string prefix test and does not collapse "..", so reject
+        // anything that is not a plain forward-slash path of ordinary components here.
+        R_UNLESS(sub_path.front() == '/', FileSys::ResultInvalidPath);
+        R_UNLESS(sub_path.find_first_of("\\:") == std::string_view::npos,
+                 FileSys::ResultInvalidPath);
+        for (size_t pos = 1; pos < sub_path.size();) {
+            const auto end = std::min(sub_path.find('/', pos), sub_path.size());
+            const auto component = sub_path.substr(pos, end - pos);
+            R_UNLESS(!component.empty() && component != "." && component != "..",
+                     FileSys::ResultInvalidPath);
+            pos = end + 1;
+        }
         const auto sub_dir = bis_dir->GetDirectoryRelative(sub_path);
         R_UNLESS(sub_dir != nullptr, FileSys::ResultPathNotFound);
         bis_dir = sub_dir;
