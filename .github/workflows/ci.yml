@@ -44,13 +44,15 @@ jobs:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_MAXSIZE: 3000M
       CCACHE_COMPILERCHECK: content
+      # Same LLVM major as the release build (PGO_LLVM_VERSION in release-binaries.yml). Ubuntu's
+      # own clang 18 crashes (exit 139) on the nvdrv sources, so the toolchain comes from apt.llvm.org.
+      LLVM_VERSION: "23"
     steps:
       - name: Check out source
         uses: actions/checkout@v5
 
       # The dependency list of the linux-x86_64 job in release-binaries.yml, minus the Qt packages
-      # and the xcb libraries: this build has ENABLE_QT=OFF, and the tests do not link Qt. clang and
-      # lld are Ubuntu's own packages (clang 18), which is enough because no PGO profile is read.
+      # and the xcb libraries: this build has ENABLE_QT=OFF, and the tests do not link Qt.
       - name: Install Linux dependencies
         shell: bash
         run: |
@@ -63,9 +65,22 @@ jobs:
             libswscale-dev pkg-config zlib1g-dev libva-dev libvdpau-dev \
             spirv-tools spirv-headers libusb-1.0-0-dev \
             libboost-dev libboost-fiber-dev libboost-context-dev \
-            libopus-dev libasound2-dev ccache \
-            clang lld
-          clang --version
+            libopus-dev libasound2-dev ccache
+
+      # The versioned packages are named explicitly: that repo's unversioned clang/lld are
+      # meta-packages for a different major. lld ships ld.lld under /usr/lib/llvm-$LLVM_VERSION/bin,
+      # so the Configure step passes -B there.
+      - name: Install clang
+        shell: bash
+        run: |
+          curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key |
+            sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc > /dev/null
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-$LLVM_VERSION main" |
+            sudo tee /etc/apt/sources.list.d/llvm.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            "clang-$LLVM_VERSION" "lld-$LLVM_VERSION"
+          "clang-$LLVM_VERSION" --version
 
       - name: Restore CPM downloads
         id: cpm-cache
@@ -83,19 +98,19 @@ jobs:
         uses: actions/cache/restore@v5
         with:
           path: .ccache
-          key: ci-objects-clang-v1-${{ hashFiles('CMakeLists.txt', 'cpmfile.json') }}-${{ github.sha }}
+          key: ci-objects-clang-v2-${{ hashFiles('CMakeLists.txt', 'cpmfile.json') }}-${{ github.sha }}
           restore-keys: |
-            ci-objects-clang-v1-${{ hashFiles('CMakeLists.txt', 'cpmfile.json') }}-
-            ci-objects-clang-v1-
+            ci-objects-clang-v2-${{ hashFiles('CMakeLists.txt', 'cpmfile.json') }}-
+            ci-objects-clang-v2-
 
       - name: Configure
         shell: bash
         run: |
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_COMPILER=clang \
-            -DCMAKE_CXX_COMPILER=clang++ \
-            -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld \
+            "-DCMAKE_C_COMPILER=clang-$LLVM_VERSION" \
+            "-DCMAKE_CXX_COMPILER=clang++-$LLVM_VERSION" \
+            "-DCMAKE_EXE_LINKER_FLAGS=-B/usr/lib/llvm-$LLVM_VERSION/bin -fuse-ld=lld" \
             -DYUZU_TESTS=ON \
             -DENABLE_QT=OFF \
             -DYUZU_CMD=ON \
