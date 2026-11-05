@@ -28,6 +28,7 @@
 #include "core/hle/service/kernel_helpers.h"
 #include "core/hle/service/service.h"
 #include "core/hle/service/nx2_stub_interface.h"
+#include "core/hle/service/nx2_stub_stats.h"
 #include "core/hle/service/sm/sm.h"
 #include "core/reporter.h"
 
@@ -81,6 +82,7 @@ bool ServiceFrameworkBase::StubAllowed(HLERequestContext& ctx) {
     if (Settings::values.use_auto_stub || env_auto_stub ||
         std::string_view{service_name}.starts_with(Nx2StubPrefix) ||
         (caller != nullptr && caller->IsSwitch2())) {
+        NoteStubbedCommand(service_name, ctx.GetCommand());
         // Logged once per command: these are still unimplemented.
         static std::mutex mutex;
         static std::set<std::pair<std::string_view, u32>> logged;
@@ -152,6 +154,7 @@ void ServiceFrameworkBase::ReportUnimplementedFunction(HLERequestContext& ctx,
     // Auto-stubbed commands are reported once each: title 1 polls nx2:camera 29 every frame
     // (~47 calls a second), and every report wrote a Critical line, which flushes the log file.
     if (auto_stub) {
+        NoteStubbedCommand(service_name, ctx.GetCommand());
         static std::mutex reported_mutex;
         static std::set<std::pair<std::string, u32>> reported;
         std::scoped_lock lk{reported_mutex};

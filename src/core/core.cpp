@@ -50,6 +50,7 @@
 #include "core/hle/service/filesystem/filesystem.h"
 #include "core/hle/service/glue/glue_manager.h"
 #include "core/hle/service/glue/time/static.h"
+#include "core/hle/service/nx2_stub_stats.h"
 #include "core/hle/service/psc/time/static.h"
 #include "core/hle/service/psc/time/steady_clock.h"
 #include "core/hle/service/psc/time/system_clock.h"
@@ -496,6 +497,7 @@ struct System::Impl {
         kernel.ShutdownCores();
         services.reset();
         service_manager.reset();
+        Service::LogStubbedCommandSummary();
         fs_controller.Reset();
         cheat_engine.reset();
         core_timing.ClearPendingEvents();

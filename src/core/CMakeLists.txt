@@ -1049,6 +1049,8 @@ add_library(core STATIC
     hle/service/service.h
     hle/service/nx2_streamplay.h
     hle/service/nx2_stub_interface.h
+    hle/service/nx2_stub_stats.cpp
+    hle/service/nx2_stub_stats.h
     hle/service/nx2_gsv.h
     hle/service/nx2_video_input_queue.h
     hle/service/nx2_image_layout.h
