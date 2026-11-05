@@ -7,7 +7,9 @@
 #pragma once
 
 #include <memory>
+#include "core/file_sys/bis_factory.h"
 #include "core/file_sys/fs_save_data_types.h"
+#include "core/file_sys/fssrv/fssrv_sf_path.h"
 #include "core/hle/service/cmif_types.h"
 #include "core/hle/service/filesystem/fsp/fsp_types.h"
 #include "core/hle/service/service.h"
@@ -54,6 +56,9 @@ private:
     Result OpenDataFileSystemByCurrentProcess(OutInterface<IFileSystem> out_interface);
     Result OpenFileSystemWithPatch(OutInterface<IFileSystem> out_interface,
                                    FileSystemProxyType type, u64 open_program_id);
+    Result OpenBisFileSystem(OutInterface<IFileSystem> out_interface,
+                             const InLargeData<FileSys::Sf::Path, BufferAttr_HipcPointer> path,
+                             FileSys::BisPartitionId partition_id);
     Result OpenSdCardFileSystem(OutInterface<IFileSystem> out_interface);
     Result CreateSaveDataFileSystem(FileSys::SaveDataCreationInfo save_create_struct,
                                     FileSys::SaveDataAttribute save_struct, u128 uid);
