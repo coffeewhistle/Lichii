@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <cstring>
 #include "common/assert.h"
+#include "common/env.h"
 #include "common/logging.h"
 #include "core/core.h"
 #include "core/core_timing.h"
@@ -221,10 +222,7 @@ void ApplyNx2Characteristics(GC& gc) {
     // NVGPU_GPU_FLAGS_SUPPORT_REMAP: without it NvRm fails every remap (nvnMemoryPoolMapVirtual)
     // before asking the server, so title 1 never maps or unmaps its sparse texture tiles (nx2:gpu
     // 216) and streams its terrain into unmapped sparse memory. EDEN_NX2_SPARSE_REMAP=0 leaves it out.
-    static const bool remap = [] {
-        const char* value = std::getenv("EDEN_NX2_SPARSE_REMAP");
-        return value == nullptr || value[0] != '0';
-    }();
+    static const bool remap = Common::Env::Flag("EDEN_NX2_SPARSE_REMAP", true);
     if (remap) {
         gc.flags |= 1ULL << 35;
     }

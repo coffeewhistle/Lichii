@@ -18,6 +18,7 @@
 
 #include "common/bit_field.h"
 #include "common/common_types.h"
+#include "common/env.h"
 #include "common/scratch_buffer.h"
 #include "video_core/engines/engine_interface.h"
 #include "video_core/engines/puller.h"
@@ -209,10 +210,7 @@ public:
 
     /// EDEN_NX2_RESNAPSHOT=0 turns snapshot refreshes off.
     static bool ResnapshotEnabled() {
-        static const bool enabled = [] {
-            const char* value = std::getenv("EDEN_NX2_RESNAPSHOT");
-            return value == nullptr || value[0] != '0';
-        }();
+        static const bool enabled = Common::Env::Flag("EDEN_NX2_RESNAPSHOT", true);
         return enabled;
     }
     /// Reads a command list on pages the GPU wrote into command_headers, from the copies the

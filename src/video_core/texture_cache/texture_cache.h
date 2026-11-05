@@ -18,6 +18,7 @@
 #include <boost/container/small_vector.hpp>
 
 #include "common/alignment.h"
+#include "common/env.h"
 #include "common/scope_exit.h"
 #include "common/settings.h"
 #include "common/slot_vector.h"
@@ -40,7 +41,7 @@ namespace VideoCommon {
 
 /// EDEN_NATIVE_DRAW_DIAGNOSTICS is read once: getenv scans the whole environment block on Windows.
 [[nodiscard]] inline bool NativeDrawDiagnostics() {
-    static const bool enabled = std::getenv("EDEN_NATIVE_DRAW_DIAGNOSTICS") != nullptr;
+    static const bool enabled = Common::Env::IsSet("EDEN_NATIVE_DRAW_DIAGNOSTICS");
     return enabled;
 }
 
@@ -142,10 +143,7 @@ void TextureCache<P>::RunGarbageCollector() {
         aggressive_mode = allow_aggressive && total_used_memory >= critical_memory;
         ticks_to_destroy = aggressive_mode ? 10ULL : high_priority_mode ? 25ULL : 50ULL;
         // EDEN_NX2_TC_MIN_AGE=<frames>: never evict images used more recently (thrash tests).
-        static const u64 min_age = [] {
-            const char* value = std::getenv("EDEN_NX2_TC_MIN_AGE");
-            return value != nullptr ? std::strtoull(value, nullptr, 10) : 0ULL;
-        }();
+        static const u64 min_age = Common::Env::Number<u64>("EDEN_NX2_TC_MIN_AGE", 0);
         ticks_to_destroy = (std::max)(ticks_to_destroy, min_age);
         num_iterations = aggressive_mode ? 40 : (high_priority_mode ? 20 : 10);
     };
@@ -239,10 +237,7 @@ void TextureCache<P>::RunGarbageCollector() {
         }
     };
     Configure(false);
-    static const u64 old_age = [] {
-        const char* value = std::getenv("EDEN_NX2_TC_OLD_AGE");
-        return value != nullptr ? std::strtoull(value, nullptr, 10) : 1800ULL;
-    }();
+    static const u64 old_age = Common::Env::Number<u64>("EDEN_NX2_TC_OLD_AGE", 1800);
     if (high_priority_mode && old_age != 0 && frame_tick > old_age) {
         evict_old_costly = true;
         lru_cache.ForEachItemBelow(frame_tick - old_age, Cleanup);
@@ -268,8 +263,8 @@ void TextureCache<P>::ApplyThresholdOverrides(bool log) {
     // EDEN_NX2_TC_EXPECTED_MIB / EDEN_NX2_TC_CRITICAL_MIB override the collector's thresholds.
     for (const auto& [name, target] : {std::pair{"EDEN_NX2_TC_EXPECTED_MIB", &expected_memory},
                                        std::pair{"EDEN_NX2_TC_CRITICAL_MIB", &critical_memory}}) {
-        if (const char* value = std::getenv(name)) {
-            *target = std::strtoull(value, nullptr, 10) << 20;
+        if (Common::Env::IsSet(name)) {
+            *target = Common::Env::Number<u64>(name, 0) << 20;
         }
     }
     if (log) {
@@ -385,7 +380,7 @@ void TextureCache<P>::TickFrame() {
     }
     // Every 600 frames: device memory in use against the collector's thresholds.
     // Skip expensive heap allocation, map construction, and sorting unless debug logging is explicitly enabled.
-    static const bool log_tc = std::getenv("EDEN_NX2_TC_LOG") != nullptr;
+    static const bool log_tc = Common::Env::IsSet("EDEN_NX2_TC_LOG");
     static u64 frames{};
     if (log_tc && ++frames % 600 == 0) {
         u64 image_bytes{};

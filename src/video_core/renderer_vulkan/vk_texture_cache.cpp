@@ -21,6 +21,7 @@
 #include "common/alignment.h"
 #include "common/bit_util.h"
 #include "common/div_ceil.h"
+#include "common/env.h"
 #include "common/literals.h"
 #include "common/settings.h"
 #include "shader_recompiler/byte_addressed_image.h"
@@ -221,7 +222,7 @@ enum class SparseTilesMode {
 
 [[nodiscard]] SparseTilesMode SparseTilesModeOf(const Device& device) {
     static const char force_aliased = [] {
-        const char* value = std::getenv("EDEN_NX2_SPARSE_ALIASED");
+        const char* value = Common::Env::String("EDEN_NX2_SPARSE_ALIASED");
         return value == nullptr ? '\0' : value[0];
     }();
     if (!device.IsSparseResidencyImage2DSupported()) {
@@ -346,10 +347,7 @@ constexpr std::array<VkFormat, 2> OpaqueAstcViewFormats{VK_FORMAT_BC1_RGBA_UNORM
 // (title 1's two terrain arrays took 724 MiB of a 6 GB card next to ~1.2 GB of other sparse terrain
 // textures). EDEN_NX2_ASTC_ARRAY_MIB=<MiB> sets it.
 [[nodiscard]] u64 TrimmedAstcArrayLimit(const Device& device) {
-    static const u64 forced = [] {
-        const char* value = std::getenv("EDEN_NX2_ASTC_ARRAY_MIB");
-        return value != nullptr ? std::strtoull(value, nullptr, 10) << 20 : 0ULL;
-    }();
+    static const u64 forced = Common::Env::Number<u64>("EDEN_NX2_ASTC_ARRAY_MIB", 0) << 20;
     if (forced != 0) {
         return forced;
     }
@@ -1198,7 +1196,7 @@ void UseBc3ForSwitch2OnSmallCards(const Device& device) {
     }
     const u64 budget = device.GetDeviceMemoryBudget();
     const u64 memory = budget != 0 ? budget : device.GetDeviceLocalMemory();
-    const char* keep = std::getenv("EDEN_NX2_KEEP_ASTC");
+    const char* keep = Common::Env::String("EDEN_NX2_KEEP_ASTC");
     if (memory >= 20_GiB || (keep != nullptr && keep[0] == '1')) {
         return;
     }
@@ -1719,7 +1717,7 @@ bool TextureCacheRuntime::WantsTemporalUpscaleDepth() const {
     // without the formats, a failed start). EDEN_NX2_DLSS_REPLACEMENT=standin forces
     // the stand-in for A/B runs.
     static const bool force_standin = [] {
-        const char* const value = std::getenv("EDEN_NX2_DLSS_REPLACEMENT");
+        const char* const value = Common::Env::String("EDEN_NX2_DLSS_REPLACEMENT");
         return value && std::string_view{value} == "standin";
     }();
     if (force_standin) {
@@ -1736,7 +1734,7 @@ bool TextureCacheRuntime::WantsTemporalUpscaleDepth() const {
 bool TextureCacheRuntime::UsesNvidiaDlss() const {
 #ifdef EGLANTINE_STREAMLINE
     static const bool force_fsr = [] {
-        const char* const value = std::getenv("EDEN_NX2_DLSS_REPLACEMENT");
+        const char* const value = Common::Env::String("EDEN_NX2_DLSS_REPLACEMENT");
         return value && std::string_view{value} == "fsr";
     }();
     return !force_fsr && !dlss_unsupported && Streamline::IsDlssAvailable();
@@ -1802,7 +1800,7 @@ bool TextureCacheRuntime::UpscaleWithFsr3(Framebuffer* dst_framebuffer, ImageVie
     // FSR's own RCAS, set by the sharpness slider: FSR takes 0-1 for 2 to 0 stops, and the slider
     // stores stops x 100, so this is the percentage the slider shows; 0% (stored 200) is off.
     // EDEN_NX2_TEMPORAL_SHARPEN=<stops>|off overrides the slider.
-    static const char* const sharpen_override = std::getenv("EDEN_NX2_TEMPORAL_SHARPEN");
+    static const char* const sharpen_override = Common::Env::String("EDEN_NX2_TEMPORAL_SHARPEN");
     const int slider = Settings::values.fsr_sharpening_slider.GetValue();
     bool sharpen = slider < 200;
     f32 stops = static_cast<f32>(slider) / 100.0f;
@@ -1887,7 +1885,7 @@ bool TextureCacheRuntime::UpscaleWithDlss(Framebuffer* dst_framebuffer, ImageVie
                                           std::array<f32, 2> motion_scale, bool reset) {
     // EDEN_NX2_DLSS_REPLACEMENT=fsr keeps FSR 3.1 for A/B runs.
     static const bool force_fsr = [] {
-        const char* const value = std::getenv("EDEN_NX2_DLSS_REPLACEMENT");
+        const char* const value = Common::Env::String("EDEN_NX2_DLSS_REPLACEMENT");
         return value && std::string_view{value} == "fsr";
     }();
     if (force_fsr || dlss_unsupported) {
@@ -2136,7 +2134,7 @@ bool TextureCacheRuntime::TemporalUpscale(Framebuffer* dst_framebuffer, ImageVie
     // RCAS on the output, set by the FSR sharpness slider (stops as FSR takes them, 0% = stored 200
     // turns it off). It reads the unsharpened result just stored, which stays the history.
     // EDEN_NX2_TEMPORAL_SHARPEN=<stops>|off overrides the slider.
-    static const char* const sharpen_override = std::getenv("EDEN_NX2_TEMPORAL_SHARPEN");
+    static const char* const sharpen_override = Common::Env::String("EDEN_NX2_TEMPORAL_SHARPEN");
     const int slider = Settings::values.fsr_sharpening_slider.GetValue();
     bool sharpen = slider < 200;
     f32 sharpness = static_cast<f32>(slider) / 100.0f;
@@ -2773,10 +2771,7 @@ void TextureCacheRuntime::LogMemoryStatistics() const {
 
 bool TextureCacheRuntime::UseOpaqueAstcFormat() const {
     // EDEN_NX2_ASTC_BC1=0 keeps every re-compressed ASTC image in BC3.
-    static const bool enabled = [] {
-        const char* value = std::getenv("EDEN_NX2_ASTC_BC1");
-        return value == nullptr || value[0] != '0';
-    }();
+    static const bool enabled = Common::Env::Flag("EDEN_NX2_ASTC_BC1", true);
     return enabled && !device.IsOptimalAstcSupported() &&
            Settings::GetAstcRecompression() == Settings::AstcRecompression::Bc3;
 }
@@ -4529,7 +4524,7 @@ Sampler::Sampler(TextureCacheRuntime& runtime, const Tegra::Texture::TSCEntry& t
         min_lod = tsc.MinLod();
         max_lod = tsc.MaxLod();
         // EDEN_NX2_FORCE_LOD0: sample only the top mip level (debug aid for mip layout problems).
-        if (static const bool force_lod0 = std::getenv("EDEN_NX2_FORCE_LOD0") != nullptr; force_lod0) {
+        if (static const bool force_lod0 = Common::Env::IsSet("EDEN_NX2_FORCE_LOD0"); force_lod0) {
             min_lod = 0.0f;
             max_lod = 0.25f;
         }

@@ -5,11 +5,12 @@
 #include <cstdlib>
 
 #include "common/common_types.h"
+#include "common/env.h"
 
 namespace VideoCommon::RenderTrace {
 
 inline bool Enabled() {
-    static const bool enabled = std::getenv("EDEN_NX2_RENDER_TRACE") != nullptr;
+    static const bool enabled = Common::Env::IsSet("EDEN_NX2_RENDER_TRACE");
     return enabled;
 }
 

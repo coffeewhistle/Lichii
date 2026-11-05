@@ -15,6 +15,7 @@
 
 #include <fmt/format.h>
 
+#include "common/env.h"
 #include "common/fs/fs_util.h"
 #include "common/fs/path_util.h"
 #include "common/logging.h"
@@ -57,8 +58,7 @@ State& GetState() {
 }
 
 int LogLevel() {
-    const char* const value = std::getenv("EDEN_NX2_DLSS_LOG");
-    return value ? std::atoi(value) : 0;
+    return Common::Env::Number<int>("EDEN_NX2_DLSS_LOG", 0);
 }
 
 void LogFromStreamline(sl::LogType type, const char* message) {
@@ -85,7 +85,7 @@ void LogFromStreamline(sl::LogType type, const char* message) {
 /// folder, then a "streamline" folder next to the executable.
 std::vector<std::filesystem::path> SearchDirs() {
     std::vector<std::filesystem::path> dirs;
-    if (const char* const dir = std::getenv("EDEN_STREAMLINE_DIR"); dir && *dir) {
+    if (const char* const dir = Common::Env::String("EDEN_STREAMLINE_DIR"); dir && *dir) {
         dirs.emplace_back(dir);
     }
     dirs.push_back(UserFolder());

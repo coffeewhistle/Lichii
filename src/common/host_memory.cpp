@@ -21,6 +21,7 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#include "common/env.h"
 #include "common/scope_exit.h"
 #include "common/settings.h"
 
@@ -1028,10 +1029,7 @@ void HostMemory::ClearBackingRegion(size_t physical_offset, size_t length, u32 f
     // A granule cleared in full is zero again.
 #ifdef __linux__
     // Handing a whole granule back to the kernel frees its RAM; a memset would commit it.
-    static const bool punch = [] {
-        const char* value = std::getenv("EDEN_PUNCH_HOLE");
-        return value == nullptr || value[0] != '0';
-    }();
+    static const bool punch = Common::Env::Flag("EDEN_PUNCH_HOLE", true);
 #endif
     const size_t end = physical_offset + length;
     for (size_t offset = physical_offset; offset < end;) {

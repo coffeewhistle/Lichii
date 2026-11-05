@@ -16,6 +16,7 @@
 #include "audio_core/common/common.h"
 #include "audio_core/sink/sink_stream.h"
 #include "common/common_types.h"
+#include "common/env.h"
 #include "common/fixed_point.h"
 #include "common/scope_exit.h"
 #include "common/settings.h"
@@ -244,7 +245,7 @@ void SinkStream::ProcessAudioOutAndRender(std::span<s16> output_buffer, std::siz
     std::memcpy(last_frame.data(), &output_buffer[(frames_written - 1) * frame_size], frame_size_bytes);
 
     // EDEN_NX2_AUDIO_LEVEL: log the output peak about every two seconds (is a game audible?).
-    if (static const bool meter = std::getenv("EDEN_NX2_AUDIO_LEVEL") != nullptr;
+    if (static const bool meter = Common::Env::IsSet("EDEN_NX2_AUDIO_LEVEL");
         meter || type == StreamType::Sysmix) {
         for (size_t i = 0; i < num_frames * frame_size; ++i) {
             level_peak = std::max<s32>(level_peak, std::abs(static_cast<s32>(output_buffer[i])));

@@ -20,6 +20,7 @@
 #include "common/bit_field.h"
 #include "common/common_funcs.h"
 #include "common/common_types.h"
+#include "common/env.h"
 #include "common/math_util.h"
 #include "video_core/engines/const_buffer_info.h"
 #include "video_core/engines/engine_interface.h"
@@ -3300,10 +3301,7 @@ private:
 
     /// Whether state register writes that keep the register's value are dropped (CallMethod).
     static bool SkipSameValueWrites() {
-        static const bool skip = [] {
-            const char* value = std::getenv("EDEN_NX2_SKIP_SAME");
-            return value == nullptr || value[0] != '0';
-        }();
+        static const bool skip = Common::Env::Flag("EDEN_NX2_SKIP_SAME", true);
         return skip;
     }
 
@@ -3355,7 +3353,7 @@ private:
     size_t recent_write_index = 0;
     const bool record_write_history{
 #ifdef NDEBUG
-        std::getenv("EDEN_NX2_3D_HISTORY") != nullptr
+        Common::Env::IsSet("EDEN_NX2_3D_HISTORY")
 #else
         true
 #endif

@@ -16,6 +16,7 @@
 
 #include "common/assert.h"
 #include "common/common_types.h"
+#include "common/env.h"
 #include "common/logging.h"
 #include "common/div_ceil.h"
 #include "common/vector_math.h"
@@ -804,10 +805,7 @@ void ASTCDecoderPass::AssembleInto(const VideoCommon::ImageInfo& info, u32 skip,
     });
     // Each decode ends with a submit to the host GPU. Measured here
     // (count and time per 5 s); EDEN_NX2_ASTC_FLUSH=0 waits for the host GPU to go idle instead.
-    static const bool flush_only = [] {
-        const char* value = std::getenv("EDEN_NX2_ASTC_FLUSH");
-        return value == nullptr || value[0] != '0';
-    }();
+    static const bool flush_only = Common::Env::Flag("EDEN_NX2_ASTC_FLUSH", true);
     if (!target.wait) {
         return;
     }

@@ -9,6 +9,7 @@
 #if defined(_M_X64) || defined(__x86_64__)
 #include <immintrin.h>
 #endif
+#include "common/env.h"
 #include "common/settings.h"
 #include "core/arm/dynarmic/arm_dynarmic.h"
 #include "core/arm/dynarmic/arm_dynarmic_64.h"
@@ -250,10 +251,7 @@ u64 DynarmicCallbacks64::GetCNTPCT() {
     // GPU thread is often on the other half of that SMT core. Two reads within ~1.7 us of each
     // other are such a loop: pause, which hands the core's resources to the sibling thread for a
     // moment. The guest sees the same counter. EDEN_NX2_CNTPCT_PAUSE=0 turns it off.
-    static const bool pause_spins = [] {
-        const char* value = std::getenv("EDEN_NX2_CNTPCT_PAUSE");
-        return value == nullptr || value[0] != '0';
-    }();
+    static const bool pause_spins = Common::Env::Flag("EDEN_NX2_CNTPCT_PAUSE", true);
     if (pause_spins && ticks - m_last_cntpct < m_spin_ticks) {
 #if defined(_M_X64) || defined(__x86_64__)
         _mm_pause();

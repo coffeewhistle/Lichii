@@ -8,6 +8,7 @@
 #include <cstdlib>
 
 #include "common/assert.h"
+#include "common/env.h"
 #include "common/logging.h"
 #include "common/settings.h"
 #include "core/core.h"
@@ -215,10 +216,7 @@ void Puller::ProcessSemaphoreTriggerMethod(DmaPusher& dma_pusher) {
     const auto semaphoreOperationMask = 0xF;
     const auto op = GpuSemaphoreOperation(regs.semaphore_trigger & semaphoreOperationMask);
     // EDEN_NX2_SEM_WATCH=<gpu address>: log every release/acquire on the 16 bytes there.
-    static const GPUVAddr watch = [] {
-        const char* value = std::getenv("EDEN_NX2_SEM_WATCH");
-        return value ? GPUVAddr{std::strtoull(value, nullptr, 16)} : GPUVAddr{};
-    }();
+    static const GPUVAddr watch = GPUVAddr{Common::Env::Number<u64>("EDEN_NX2_SEM_WATCH", 0, 16)};
     if (watch != 0 && (regs.semaphore_address.SemaphoreAddress() & ~GPUVAddr{0xf}) == watch) {
         LOG_INFO(HW_GPU, "Semaphore watch: channel {} as {} device {:#x} op {} {:#x} value {:#x} (now {:#x})",
                  dma_pusher.channel_state.bind_id, dma_pusher.memory_manager.GetID(),
@@ -364,7 +362,7 @@ void Puller::ProcessSemaphoreExecute(DmaPusher& dma_pusher, u32 argument) {
 
 /// Calls a GPU puller method.
 void Puller::CallPullerMethod(DmaPusher& dma_pusher, const MethodCall& method_call) {
-    static const bool nx2_trace = std::getenv("EDEN_NX2_PULLER_TRACE") != nullptr;
+    static const bool nx2_trace = Common::Env::IsSet("EDEN_NX2_PULLER_TRACE");
     if (nx2_trace) {
         LOG_INFO(HW_GPU, "nx2 puller sub={} method={:#x} arg={:#x}", method_call.subchannel,
                  method_call.method, method_call.argument);
@@ -448,7 +446,7 @@ void Puller::CallPullerMethod(DmaPusher& dma_pusher, const MethodCall& method_ca
 
 /// Calls a GPU engine method.
 static bool Nx2MethodTrace() {
-    static const bool trace = std::getenv("EDEN_NX2_METHOD_TRACE") != nullptr;
+    static const bool trace = Common::Env::IsSet("EDEN_NX2_METHOD_TRACE");
     return trace;
 }
 

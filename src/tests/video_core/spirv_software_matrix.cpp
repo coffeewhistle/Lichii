@@ -11,6 +11,7 @@
 #include <vector>
 #include <catch2/catch_test_macros.hpp>
 
+#include "common/env.h"
 #include "shader_recompiler/backend/spirv/emit_spirv.h"
 #include "shader_recompiler/exception.h"
 #include "shader_recompiler/frontend/ampere/lower_to_maxwell.h"
@@ -25,7 +26,7 @@ struct TensorMode {
     bool existed{};
 
     explicit TensorMode(const char* mode) {
-        if (const char* value = std::getenv("EDEN_NX2_TENSOR")) {
+        if (const char* value = Common::Env::String("EDEN_NX2_TENSOR")) {
             previous = value;
             existed = true;
         }
@@ -98,7 +99,7 @@ struct TensorProgram {
 
     std::vector<u32> Emit(std::string_view name = {}) {
         auto code = Backend::SPIRV::EmitSPIRV(profile, program);
-        if (const char* directory = std::getenv("EDEN_TENSOR_TEST_OUTPUT");
+        if (const char* directory = Common::Env::String("EDEN_TENSOR_TEST_OUTPUT");
             directory && !name.empty()) {
             std::filesystem::create_directories(directory);
             std::ofstream file{std::filesystem::path{directory} / (std::string{name} + ".spv"),

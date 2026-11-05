@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "common/common_types.h"
+#include "common/env.h"
 #include "common/logging.h"
 #include "common/settings.h"
 #include "video_core/vulkan_common/vulkan_wrapper.h"
@@ -360,7 +361,7 @@ public:
     /// EDEN_NX2_SPARSE_UNBACKED=1 allows unbound images on any driver, =0 on none.
     bool CanUseUnbackedSparseImages() const {
         static const char forced = [] {
-            const char* value = std::getenv("EDEN_NX2_SPARSE_UNBACKED");
+            const char* value = Common::Env::String("EDEN_NX2_SPARSE_UNBACKED");
             return value == nullptr ? '\0' : value[0];
         }();
         if (forced == '0' || forced == '1') {

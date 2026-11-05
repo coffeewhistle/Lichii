@@ -16,6 +16,7 @@
 #include <bit>
 #include <numeric>
 #include "common/cityhash.h"
+#include "common/env.h"
 #include "common/scope_exit.h"
 #include "common/fs/fs.h"
 #include "common/fs/path_util.h"
@@ -654,7 +655,7 @@ constexpr size_t MaxPipelinesWithoutUsedList = 3000;
 // EDEN_NX2_PRELOAD_ALL_PIPELINES=1 builds every cached pipeline at boot, as before.
 bool PreloadAllPipelines() {
     static const bool all = [] {
-        const char* value = std::getenv("EDEN_NX2_PRELOAD_ALL_PIPELINES");
+        const char* value = Common::Env::String("EDEN_NX2_PRELOAD_ALL_PIPELINES");
         return value != nullptr && value[0] == '1';
     }();
     return all;
@@ -953,7 +954,7 @@ namespace {
 // log which parts of the fixed state differ from that one (finds state that splits the same
 // draws into many pipelines, each translated on the GPU thread).
 void ReportNewPipelineKey(const GraphicsPipelineCacheKey& key) {
-    static const bool enabled = std::getenv("EDEN_NX2_PIPELINE_DIFF") != nullptr;
+    static const bool enabled = Common::Env::IsSet("EDEN_NX2_PIPELINE_DIFF");
     if (!enabled) {
         return;
     }
@@ -1375,7 +1376,7 @@ ComputePipelineCacheEntry PipelineCache::CreateComputePipeline(
 
     main_pools.ReleaseContents();
     auto entry{CreateComputePipeline(main_pools, key, env, nullptr, true)};
-    if (const char* directory = std::getenv("EDEN_NX2_SHADER_DUMP");
+    if (const char* directory = Common::Env::String("EDEN_NX2_SHADER_DUMP");
         directory && !entry.pipeline && env.CanBeSerialized()) {
         const auto path = std::filesystem::path{directory} /
                           fmt::format("failed-compute-{:016x}-v{}.env", key.unique_hash, CACHE_VERSION);

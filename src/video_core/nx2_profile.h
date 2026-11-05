@@ -11,6 +11,7 @@
 
 #include "common/common_types.h"
 #include "video_core/gpu_split.h"
+#include "common/env.h"
 #include "common/logging.h"
 #include "common/cpu_features.h"
 #include "common/thread_cpu_clock.h"
@@ -71,7 +72,7 @@ inline constexpr std::array<const char*, static_cast<size_t>(Zone::Count)> zone_
 };
 
 // Read once at startup: Enabled() runs several times per method write (no guard to check).
-inline const bool g_enabled = std::getenv("EDEN_NX2_GPU_PROFILE") != nullptr;
+inline const bool g_enabled = Common::Env::IsSet("EDEN_NX2_GPU_PROFILE");
 
 inline bool Enabled() {
     return g_enabled;

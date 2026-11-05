@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <mutex>
 #include "common/common_types.h"
+#include "common/env.h"
 
 namespace VideoCommon {
 namespace NativeQueryDiagnostics {
@@ -30,7 +31,7 @@ inline State& GetState() {
 // 10=DMA destination (value=source, flags=line bytes), 11=inline write.
 // Keep this opt-in and bounded.
 inline void TraceNativeQuery(u32 event, u64 asid, u64 gpu, u64 cpu, u32 type, u64 value, u32 flags) {
-    static const bool diagnostics = std::getenv("EDEN_NATIVE_DRAW_DIAGNOSTICS") != nullptr;
+    static const bool diagnostics = Common::Env::IsSet("EDEN_NATIVE_DRAW_DIAGNOSTICS");
     if (!diagnostics) return;
     auto& state = NativeQueryDiagnostics::GetState();
     const std::scoped_lock lock{state.mutex};

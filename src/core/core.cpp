@@ -10,6 +10,7 @@
 #include "game_settings.h"
 #include "common/cpu_features.h"
 #include "audio_core/audio_core.h"
+#include "common/env.h"
 #include "common/fs/fs.h"
 #include "common/logging.h"
 #include "common/adpf.h"
@@ -371,10 +372,7 @@ struct System::Impl {
         // (nn::os::GetSystemTickFrequency, TickManager::ConvertToTimeSpan/ConvertToTick). At 19.2 MHz
         // every tick-based time in the game was off by 1.63x: elapsed times read short and a frame
         // deadline in ticks waited ~27 ms. EDEN_NX2_CNTFRQ=<Hz> overrides it (A/B tests).
-        static const u64 forced_cntfrq = [] {
-            const char* value = std::getenv("EDEN_NX2_CNTFRQ");
-            return value != nullptr ? std::strtoull(value, nullptr, 10) : 0ULL;
-        }();
+        static const u64 forced_cntfrq = Common::Env::Number<u64>("EDEN_NX2_CNTFRQ", 0);
         const u64 cntfrq = forced_cntfrq != 0 ? forced_cntfrq
                            : switch2_program  ? Common::WallClock::Switch2CNTFRQ
                                               : Common::WallClock::CNTFRQ;

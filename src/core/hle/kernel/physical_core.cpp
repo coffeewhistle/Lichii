@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <thread>
+#include "common/env.h"
 #include "common/scope_exit.h"
 #include "common/settings.h"
 #include "core/core.h"
@@ -228,10 +229,7 @@ void PhysicalCore::Idle() {
     // Guest job systems hand work between cores many times per frame; blocking at once adds the
     // host's thread wake-up latency to every handoff. EDEN_NX2_IDLE_SPIN_US=<n>: poll for that
     // many microseconds before blocking.
-    static const auto spin = std::chrono::microseconds{[] {
-        const char* text = std::getenv("EDEN_NX2_IDLE_SPIN_US");
-        return text ? std::strtoll(text, nullptr, 10) : 0LL;
-    }()};
+    static const auto spin = std::chrono::microseconds{Common::Env::Number<s64>("EDEN_NX2_IDLE_SPIN_US", 0)};
     if (spin.count() > 0) {
         const auto deadline = std::chrono::steady_clock::now() + spin;
         while (!m_is_interrupted.load(std::memory_order_acquire) &&

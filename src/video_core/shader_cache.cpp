@@ -18,6 +18,7 @@
 
 #include "common/assert.h"
 #include "common/cityhash.h"
+#include "common/env.h"
 #include "shader_recompiler/frontend/maxwell/control_flow.h"
 #include "shader_recompiler/exception.h"
 #include "shader_recompiler/frontend/ampere/trap_guards.h"
@@ -147,7 +148,7 @@ bool ShaderCache::RefreshStages(std::array<u64, 6>& unique_hashes) try {
                     LOG_ERROR(HW_GPU, "Rejected program {:#x} is bound to stage {}: header {:08x}, slot {:08x}",
                               shader_addr, index, fmt::join(header, " "), fmt::join(config, " "));
                 }
-                if (native && std::getenv("EDEN_NX2_SHADER_DUMP")) {
+                if (native && Common::Env::IsSet("EDEN_NX2_SHADER_DUMP")) {
                     for (size_t next = index + 1; next < unique_hashes.size(); ++next) {
                         const auto next_program =
                             static_cast<Tegra::Engines::Maxwell3D::Regs::ShaderType>(next);

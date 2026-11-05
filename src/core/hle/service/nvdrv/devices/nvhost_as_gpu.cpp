@@ -12,6 +12,7 @@
 #include "common/alignment.h"
 #include "common/assert.h"
 #include "common/common_types.h"
+#include "common/env.h"
 #include "common/logging.h"
 #include "core/core.h"
 #include "core/hle/service/nvdrv/core/container.h"
@@ -157,7 +158,7 @@ void nvhost_as_gpu::Nx2Map(u64 gpu_address, u64 cpu_address, u64 size) {
             return address;
         };
         // EDEN_NX2_PRIVATE_DEVICE_RANGES=1 (A/B aid): a range per address space.
-        static const bool private_ranges = std::getenv("EDEN_NX2_PRIVATE_DEVICE_RANGES") != nullptr;
+        static const bool private_ranges = Common::Env::IsSet("EDEN_NX2_PRIVATE_DEVICE_RANGES");
         if (private_ranges) {
             range = {allocate(), false};
         } else {

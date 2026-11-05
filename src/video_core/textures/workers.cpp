@@ -7,6 +7,7 @@
 #include <cstdlib>
 
 #include "video_core/textures/workers.h"
+#include "common/env.h"
 
 namespace Tegra::Texture {
 
@@ -16,8 +17,8 @@ Common::ThreadWorker& GetThreadWorkers() {
     // eighth (2) both threads stayed saturated and streamed textures arrived seconds late (shown
     // as placeholders), while 4 cost no frame rate. EDEN_NX2_TRANSCODE_THREADS=<n> overrides.
     static Common::ThreadWorker workers{[] {
-        if (const char* text = std::getenv("EDEN_NX2_TRANSCODE_THREADS")) {
-            return (std::max)(static_cast<u32>(std::strtoul(text, nullptr, 10)), 1U);
+        if (Common::Env::IsSet("EDEN_NX2_TRANSCODE_THREADS")) {
+            return (std::max)(Common::Env::Number<u32>("EDEN_NX2_TRANSCODE_THREADS", 0), 1U);
         }
         return (std::max)(std::thread::hardware_concurrency() / 4, 2U);
     }(), "ImageTranscode"};

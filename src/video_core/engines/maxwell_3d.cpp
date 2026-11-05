@@ -12,6 +12,7 @@
 #include <optional>
 #include "common/assert.h"
 #include "common/bit_util.h"
+#include "common/env.h"
 #include "common/scope_exit.h"
 #include "common/settings.h"
 #include "core/core.h"
@@ -230,7 +231,7 @@ void Maxwell3D::ProcessMacro(Core::System& system, u32 method, const u32* base_s
     // (and the macro memo stores the parameters after it ran). Only accurate GPU mode rewrites
     // the parameters in place (RefreshParameters), so it keeps the vector.
     // EDEN_NX2_MACRO_COPY=1: always use the vector (for comparisons).
-    static const bool always_copy = std::getenv("EDEN_NX2_MACRO_COPY") != nullptr;
+    static const bool always_copy = Common::Env::IsSet("EDEN_NX2_MACRO_COPY");
     if (is_last_call && macro_params.empty() && amount <= 64 && !always_copy &&
         !Settings::IsGPULevelHigh()) {
         std::array<u32, 64> parameters;
@@ -455,7 +456,7 @@ void Maxwell3D::CallMacroMethod(Core::System& system, u32 method, std::span<cons
 }
 
 // EDEN_NX2_3D_METHODS: log the first write to each 3D register (finds methods Eden doesn't model).
-static const bool g_trace_first_method_writes = std::getenv("EDEN_NX2_3D_METHODS") != nullptr;
+static const bool g_trace_first_method_writes = Common::Env::IsSet("EDEN_NX2_3D_METHODS");
 
 void Maxwell3D::TraceFirstMethodWrite(u32 method, u32 argument) {
     static std::array<bool, Regs::NUM_REGS> seen{};
@@ -872,7 +873,7 @@ namespace {
 // EDEN_NX2_SPLIT_VERIFY=1: every 4096 front macro calls, wait for the back and compare the
 // front's registers with the back's (logs and resynchronizes differences).
 bool FrontVerifyEnabled() {
-    static const bool verify = std::getenv("EDEN_NX2_SPLIT_VERIFY") != nullptr;
+    static const bool verify = Common::Env::IsSet("EDEN_NX2_SPLIT_VERIFY");
     return verify;
 }
 
@@ -913,10 +914,7 @@ bool FrontHandledOutsideDrawManager(u32 method) {
 
 // EDEN_NX2_SPLIT_SKIP=0: send state writes that keep the register's value too.
 bool FrontSkipSame() {
-    static const bool skip = [] {
-        const char* value = std::getenv("EDEN_NX2_SPLIT_SKIP");
-        return value == nullptr || value[0] != '0';
-    }();
+    static const bool skip = Common::Env::Flag("EDEN_NX2_SPLIT_SKIP", true);
     return skip;
 }
 

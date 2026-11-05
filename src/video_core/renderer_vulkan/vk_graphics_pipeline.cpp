@@ -30,6 +30,7 @@
 #include "video_core/texture_cache/texture_cache.h"
 #include "video_core/vulkan_common/vulkan_device.h"
 #include "video_core/gpu_logging/gpu_logging.h"
+#include "common/env.h"
 #include "common/settings.h"
 #include "video_core/nx2_profile.h"
 
@@ -518,7 +519,7 @@ bool GraphicsPipeline::ConfigureImpl(bool is_indexed) {
                                      Spec::has_images);
     }
     static const bool record_sampled = [] {
-        const char* const value = std::getenv("EDEN_NX2_FRAME_DUMP_SAMPLED");
+        const char* const value = Common::Env::String("EDEN_NX2_FRAME_DUMP_SAMPLED");
         return value && *value != '\0' && *value != '0';
     }();
     if (record_sampled) {

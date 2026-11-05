@@ -4,6 +4,7 @@
 // SPDX-FileCopyrightText: Copyright 2018 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include "common/env.h"
 #include "common/scope_exit.h"
 #include <vector>
 #include <tuple>
@@ -77,7 +78,7 @@ void PushStubZeroes(IPC::ResponseBuilder& rb) {
 } // namespace
 
 bool ServiceFrameworkBase::StubAllowed(HLERequestContext& ctx) {
-    static const bool env_auto_stub = std::getenv("EDEN_NX2_AUTO_STUB") != nullptr;
+    static const bool env_auto_stub = Common::Env::IsSet("EDEN_NX2_AUTO_STUB");
     const auto* const caller = ctx.GetThread().GetOwnerProcess();
     if (Settings::values.use_auto_stub || env_auto_stub ||
         std::string_view{service_name}.starts_with(Nx2StubPrefix) ||
@@ -146,7 +147,7 @@ void ServiceFrameworkBase::ReportUnimplementedFunction(HLERequestContext& ctx,
                                                        const FunctionInfoBase* info) {
     // EDEN_NX2_AUTO_STUB=1 auto-stubs every unknown command without touching the config. Switch 2
     // programs are always auto-stubbed: they still call many commands nobody has implemented.
-    static const bool env_auto_stub = std::getenv("EDEN_NX2_AUTO_STUB") != nullptr;
+    static const bool env_auto_stub = Common::Env::IsSet("EDEN_NX2_AUTO_STUB");
     const auto* const caller = ctx.GetThread().GetOwnerProcess();
     const bool auto_stub = Settings::values.use_auto_stub || env_auto_stub ||
                            std::string_view{service_name}.starts_with(Nx2StubPrefix) ||
@@ -195,7 +196,7 @@ void ServiceFrameworkBase::InvokeRequest(HLERequestContext& ctx) {
 
     LOG_TRACE(Service, "{}", MakeFunctionString(info->name, GetServiceName(), ctx.CommandBuffer()));
     // EDEN_NX2_IPC_TRACE=1 logs every dispatched command and the result word it returned.
-    static const bool ipc_trace = std::getenv("EDEN_NX2_IPC_TRACE") != nullptr;
+    static const bool ipc_trace = Common::Env::IsSet("EDEN_NX2_IPC_TRACE");
     if (ipc_trace) {
         LOG_INFO(Service, "ipc {}::{} ({})", service_name, ctx.GetCommand(), info->name);
     }
@@ -222,7 +223,7 @@ void ServiceFrameworkBase::InvokeRequestTipc(HLERequestContext& ctx) {
         return ReportUnimplementedFunction(ctx, info);
 
     LOG_TRACE(Service, "{}", MakeFunctionString(info->name, GetServiceName(), ctx.CommandBuffer()));
-    static const bool ipc_trace = std::getenv("EDEN_NX2_IPC_TRACE") != nullptr;
+    static const bool ipc_trace = Common::Env::IsSet("EDEN_NX2_IPC_TRACE");
     if (ipc_trace) {
         const auto* w = ctx.CommandBuffer();
         LOG_INFO(Service, "tipc {}::{} ({}) [2]={:#x} [3]={:#x} [4]={:#x}", service_name,
@@ -235,7 +236,7 @@ namespace {
 // EDEN_NX2_IPC_SUMMARY: every 5 s, log how often each service command ran and with which result
 // since the last summary (finds a game polling something that never becomes ready).
 void CountRequest(const std::string& service, u32 command, u32 type, u32 result) {
-    static const bool enabled = std::getenv("EDEN_NX2_IPC_SUMMARY") != nullptr;
+    static const bool enabled = Common::Env::IsSet("EDEN_NX2_IPC_SUMMARY");
     if (!enabled) {
         return;
     }

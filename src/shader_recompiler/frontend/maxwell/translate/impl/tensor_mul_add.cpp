@@ -3,6 +3,7 @@
 
 #include <cstdlib>
 
+#include "common/env.h"
 #include "shader_recompiler/frontend/maxwell/translate/impl/impl.h"
 
 namespace Shader::Maxwell {
@@ -26,7 +27,7 @@ void TranslatorVisitor::TENSOR_MUL_ADD(u64 insn) {
     const u64 ci = static_cast<u64>(cr);
     const u64 di = static_cast<u64>(dr);
     const bool has_c = ci != 255;
-    static const bool disabled{std::getenv("EDEN_NX2_NO_TENSOR") != nullptr};
+    static const bool disabled{Common::Env::IsSet("EDEN_NX2_NO_TENSOR")};
     if (disabled || ((insn >> 48) & 1) == 0) {
         throw NotImplementedException("Unsupported matrix multiply encoding");
     }

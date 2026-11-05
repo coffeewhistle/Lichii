@@ -20,6 +20,7 @@
 #include <mutex>
 #include <regex>
 #include <string>
+#include "common/env.h"
 #include "common/settings_enums.h"
 #include "core/launch_params.h"
 #ifdef __EMSCRIPTEN__
@@ -101,7 +102,7 @@ static void PrintCodeAddress(const char* label, const void* address) {
 
 static LONG WINAPI WriteCrashDump(EXCEPTION_POINTERS* exception) {
     static std::atomic<bool> written{};
-    const char* directory = std::getenv("EDEN_NX2_CRASH_DUMP");
+    const char* directory = Common::Env::String("EDEN_NX2_CRASH_DUMP");
     if (directory == nullptr || written.exchange(true)) {
         return EXCEPTION_CONTINUE_SEARCH;
     }
@@ -607,7 +608,7 @@ static void RunKeyScript(InputCommon::InputSubsystem& input_subsystem) {
     };
     static const std::vector<KeyEvent> script = [] {
         std::vector<KeyEvent> events;
-        if (const char* text = std::getenv("EDEN_NX2_KEY_SCRIPT")) {
+        if (const char* text = Common::Env::String("EDEN_NX2_KEY_SCRIPT")) {
             // "@<file>" reads the list from a file: long scripts in the environment slow down
             // every getenv in the process.
             std::string list{text};

@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <string_view>
 
+#include "common/env.h"
 #include "common/logging.h"
 #include "video_core/dlss_evaluation.h"
 #include "video_core/renderer_vulkan/vk_scheduler.h"
@@ -26,8 +27,7 @@ constexpr VkImageUsageFlags OUTPUT_USAGE = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE
                                            VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
 int EnvInt(const char* name, int fallback) {
-    const char* const value = std::getenv(name);
-    return value ? std::atoi(value) : fallback;
+    return Common::Env::Number<int>(name, fallback);
 }
 
 // DLSS validates the render size against the mode's range: pick the mode for this ratio.
@@ -52,7 +52,7 @@ sl::DLSSMode ModeFor(VkExtent2D render, VkExtent2D upscale) {
 // horizontal lines in Fire Emblem at 2x resolution scale. EDEN_NX2_DLSS_PRESET=J|K|L|M picks
 // another model, EDEN_NX2_DLSS_PRESET=default leaves the choice to NVIDIA.
 sl::DLSSPreset Preset() {
-    const char* const value = std::getenv("EDEN_NX2_DLSS_PRESET");
+    const char* const value = Common::Env::String("EDEN_NX2_DLSS_PRESET");
     if (value && value[0] >= 'J' && value[0] <= 'M') {
         return static_cast<sl::DLSSPreset>(static_cast<u32>(sl::DLSSPreset::ePresetJ) +
                                            static_cast<u32>(value[0] - 'J'));

@@ -15,6 +15,7 @@
 #include <emscripten.h>
 #endif
 
+#include "common/env.h"
 #include "common/logging.h"
 #include "common/scm_rev.h"
 #include "common/settings.h"
@@ -42,7 +43,7 @@ EmuWindow_SDL3::EmuWindow_SDL3(InputCommon::InputSubsystem* input_subsystem_, Co
         // Timers run on their own thread and AppKit throws when a title is set off the main
         // thread: ApplyPendingTitle sets it from the main loop.
         delete this_->pending_title.exchange(title);
-        static const bool log_fps = std::getenv("EDEN_NX2_FPS_LOG") != nullptr;
+        static const bool log_fps = Common::Env::IsSet("EDEN_NX2_FPS_LOG");
         if (log_fps) {
             LOG_INFO(Frontend, "FPS: {:.1f} speed: {:.0f}% frametime: {:.2f} ms", results.average_game_fps,
                      results.emulation_speed * 100.0, results.frametime * 1000.0);
@@ -140,7 +141,7 @@ double Nx2KeyClockSeconds() {
 void EmuWindow_SDL3::OnKeyEvent(int key, u8 state) {
     // EDEN_NX2_KEY_RECORD=<file>: append each press/release ("seconds:code", "seconds:-code").
     static std::FILE* const record = [] {
-        const char* path = std::getenv("EDEN_NX2_KEY_RECORD");
+        const char* path = Common::Env::String("EDEN_NX2_KEY_RECORD");
         return path ? std::fopen(path, "w") : nullptr;
     }();
     static std::array<bool, 512> held{};

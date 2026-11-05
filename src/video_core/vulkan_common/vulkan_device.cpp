@@ -21,6 +21,7 @@
 #include <fmt/format.h>
 
 #include "common/assert.h"
+#include "common/env.h"
 #include "common/fs/fs.h"
 #include "common/fs/path_util.h"
 #include "common/literals.h"
@@ -1798,8 +1799,8 @@ void Device::CollectPhysicalMemoryInfo() {
     u64 device_initial_usage = 0;
     u64 local_memory = 0;
     // EDEN_NX2_VRAM_LIMIT_MIB=<n>: treat every device-local heap as n MiB (small card tests).
-    if (const char* value = std::getenv("EDEN_NX2_VRAM_LIMIT_MIB")) {
-        heap_size_limit = std::strtoull(value, nullptr, 10) << 20;
+    if (const char* value = Common::Env::String("EDEN_NX2_VRAM_LIMIT_MIB")) {
+        heap_size_limit = Common::Env::Number<u64>("EDEN_NX2_VRAM_LIMIT_MIB", 0) << 20;
         if (heap_size_limit != 0) {
             LOG_INFO(Render_Vulkan, "EDEN_NX2_VRAM_LIMIT_MIB: device-local heaps limited to {} MiB",
                      heap_size_limit >> 20);
