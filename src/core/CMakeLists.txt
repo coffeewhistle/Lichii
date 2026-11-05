@@ -1052,6 +1052,13 @@ add_library(core STATIC
     hle/service/nx2_stub_stats.cpp
     hle/service/nx2_stub_stats.h
     hle/service/nx2_gsv.h
+    hle/service/nx2_gsv_common.h
+    hle/service/nx2_gsv_stubs.h
+    hle/service/nx2_gsv_syncpt.h
+    hle/service/nx2_gsv_gpu.h
+    hle/service/nx2_gsv_chat.h
+    hle/service/nx2_gsv_vi2.h
+    hle/service/nx2_gsv_video.h
     hle/service/nx2_video_input_queue.h
     hle/service/nx2_image_layout.h
     hle/service/nx2_present_pacer.h
