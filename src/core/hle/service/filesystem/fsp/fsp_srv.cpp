@@ -58,7 +58,7 @@ FSP_SRV::FSP_SRV(Core::System& system_)
         {7, D<&FSP_SRV::OpenFileSystemWithPatch>, "OpenFileSystemWithPatch"},
         {8, nullptr, "OpenFileSystemWithId"},
         {9, nullptr, "OpenDataFileSystemByApplicationId"},
-        {11, nullptr, "OpenBisFileSystem"},
+        {11, D<&FSP_SRV::OpenBisFileSystem>, "OpenBisFileSystem"},
         {12, nullptr, "OpenBisStorage"},
         {13, nullptr, "InvalidateBisCache"},
         {17, nullptr, "OpenHostFileSystem"},
@@ -217,6 +217,37 @@ Result FSP_SRV::OpenFileSystemWithPatch(OutInterface<IFileSystem> out_interface,
 
     *out_interface = std::make_shared<IFileSystem>(
         system, extracted_romfs, SizeGetter::FromStorageId(fsc, FileSys::StorageId::NandUser));
+
+    R_SUCCEED();
+}
+
+Result FSP_SRV::OpenBisFileSystem(OutInterface<IFileSystem> out_interface,
+                                  const InLargeData<FileSys::Sf::Path, BufferAttr_HipcPointer> path,
+                                  FileSys::BisPartitionId partition_id) {
+    // The guest fills the path buffer; it need not be NUL-terminated.
+    const std::string_view sub_path{path->str, strnlen(path->str, sizeof(path->str))};
+    LOG_DEBUG(Service_FS, "called with partition_id={}, path={}", static_cast<u32>(partition_id),
+              sub_path);
+
+    // Only the partitions the BIS factory backs with a directory can be opened. Any other id
+    // is an error to the guest rather than a success without a handle, so it fails cleanly
+    // instead of using an uninitialised object.
+    FileSys::VirtualDir bis_dir{};
+    R_TRY(fsc.OpenBISPartition(&bis_dir, partition_id));
+
+    // Nintendo only resolves the path against the partition root; an empty or "/" path opens
+    // the whole partition, which is the only form homebrew uses.
+    if (!sub_path.empty() && sub_path != "/") {
+        const auto sub_dir = bis_dir->GetDirectoryRelative(sub_path);
+        R_UNLESS(sub_dir != nullptr, FileSys::ResultPathNotFound);
+        bis_dir = sub_dir;
+    }
+
+    const auto storage_id = partition_id == FileSys::BisPartitionId::User
+                                ? FileSys::StorageId::NandUser
+                                : FileSys::StorageId::NandSystem;
+    *out_interface = std::make_shared<IFileSystem>(system, bis_dir,
+                                                   SizeGetter::FromStorageId(fsc, storage_id));
 
     R_SUCCEED();
 }
