@@ -43,6 +43,20 @@ Pull requests are only to be merged by core developers when properly tested and 
 - Maintainers are permitted to change namespaces at will.
 - Commits within PRs are not required to be namespaced, but it is highly recommended.
 
+## Tests
+
+CI (`.github/workflows/ci.yml`) builds the project and runs `ctest` on every pull request and on every push to `nx2`. A change that breaks the build or a test fails the check.
+
+To run the tests locally, configure with `-DYUZU_TESTS=ON` (it is off by default), build the `tests` target and run it:
+
+```sh
+cmake -S . -B build -G Ninja -DYUZU_TESTS=ON
+cmake --build build --target tests
+./build/bin/tests
+```
+
+`ctest --test-dir build --output-on-failure` runs every registered test binary, including `update_checker_tests`, which has its own target.
+
 ## Adding new settings
 
 When adding new settings, use `tr("Setting:")` if the setting is meant to be a field, otherwise use `tr("Setting")` if the setting is meant to be a Yes/No or checkmark type of setting, see [this short style guide](https://learn.microsoft.com/en-us/style-guide/punctuation/colons#in-ui).
