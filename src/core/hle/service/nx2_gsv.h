@@ -3096,16 +3096,59 @@ private:
         return static_cast<u32>(syncpoints.GetGuestSyncpointValue(m_syncpoint));
     }
 
-    // Waits (bounded) until the client's reads of an image it gave back have passed.
+    // Waits (bounded) until the client's reads of an image it gave back have passed. Runs on the
+    // decode thread without m_mutex. A release more than 500 ms late means the client's GPU work
+    // is stalled (the decoder only runs MaxDecodedAhead frames ahead), so the frame goes out.
     void WaitForRelease(const Fence& fence) {
         if (fence.syncpoint >= HostSyncpoints) {
             return;
         }
         auto& syncpoints = system.Host1x().GetSyncpointManager();
-        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{100};
-        while (!syncpoints.IsReadyGuest(fence.syncpoint, fence.value) &&
-               std::chrono::steady_clock::now() < deadline) {
-            std::this_thread::sleep_for(std::chrono::milliseconds{1});
+        if (!syncpoints.IsReadyGuest(fence.syncpoint, fence.value)) {
+            struct Wake {
+                std::mutex mutex;
+                std::condition_variable cv;
+                bool done{};
+            };
+            auto wake = std::make_shared<Wake>();
+            // Runs inline if the value was reached meanwhile, else on the incrementing thread.
+            const auto handle =
+                syncpoints.RegisterGuestAction(fence.syncpoint, fence.value, [wake] {
+                    {
+                        std::scoped_lock lk{wake->mutex};
+                        wake->done = true;
+                    }
+                    wake->cv.notify_all();
+                });
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{500};
+            bool done = false;
+            while (true) {
+                {
+                    std::unique_lock lk{wake->mutex};
+                    done = wake->cv.wait_for(lk, std::chrono::milliseconds{10},
+                                             [&] { return wake->done; });
+                }
+                // m_mutex is not taken under wake->mutex: actions run under the syncpoint
+                // manager's lock, which the service thread takes under m_mutex.
+                if (done || std::chrono::steady_clock::now() >= deadline || !system.IsPoweredOn()) {
+                    break;
+                }
+                std::scoped_lock lk{m_mutex};
+                if (m_quit) {
+                    break;
+                }
+            }
+            if (!done) {
+                syncpoints.DeregisterGuestAction(fence.syncpoint, handle);
+                static std::atomic<u32> timeouts{};
+                if (!syncpoints.IsReadyGuest(fence.syncpoint, fence.value) &&
+                    (timeouts.fetch_add(1, std::memory_order_relaxed) % 64) == 0) {
+                    LOG_WARNING(Service, "{} gave up waiting for image release ({}, {}), current "
+                                         "value={}",
+                                GetServiceName(), fence.syncpoint, fence.value,
+                                syncpoints.GetGuestSyncpointValue(fence.syncpoint));
+                }
+            }
         }
         if (Nx2VideoTraceEnabled()) {
             LOG_INFO(Service, "nx2:vdec trace release wait syncpoint={} value={} reached={}",
