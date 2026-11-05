@@ -18,7 +18,7 @@ This is an independent fork, not an official release of those upstream projects.
 
 ## Downloads and setup
 
-Published builds belong on this fork's [releases page](https://github.com/zortos293/Eglantine/releases). The repository still uses its historical Eglantine name; the desktop application is now Lichii.
+Published builds belong on this fork's [releases page](https://github.com/zortos293/Lichii/releases). The desktop application is Lichii; some internal names still use the historical Eglantine name.
 
 On Windows, extract the entire build archive and run **lichii.exe**. Only use games and system files you have legally obtained. Games, keys and firmware are not included.
 
@@ -30,7 +30,7 @@ The rebrand intentionally retains the existing Eden/Eglantine data directories a
 
 Compatibility and performance vary by game, hardware and driver. Rendering errors, stutters and crashes remain possible. Passing automated tests does not establish that a game renders correctly, and this project makes no universal frame-rate guarantee.
 
-When [reporting an issue](https://github.com/zortos293/Eglantine/issues), include:
+When [reporting an issue](https://github.com/zortos293/Lichii/issues), include:
 
 - The exact build, game version, CPU, GPU and driver version.
 - Relevant settings and steps to reproduce the problem.
