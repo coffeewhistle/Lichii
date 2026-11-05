@@ -201,7 +201,12 @@ else()
     if (ARCHITECTURE_x86_64)
         add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:-mcx16>)
         if (LINUX OR FREEBSD)
-            add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:-mtls-dialect=gnu2>)
+            # GCC and recent clang accept the TLS descriptor dialect; older clang rejects it.
+            include(CheckCXXCompilerFlag)
+            check_cxx_compiler_flag(-mtls-dialect=gnu2 HAS_TLS_DIALECT_GNU2)
+            if (HAS_TLS_DIALECT_GNU2)
+                add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:-mtls-dialect=gnu2>)
+            endif()
         endif()
     endif()
 
