@@ -9,6 +9,7 @@
 
 #include <QApplication>
 
+#include "common/crash_dump.h"
 #include "common/fs/fs_paths.h"
 #include "common/fs/path_util.h"
 #include "startup_checks.h"
@@ -191,6 +192,7 @@ int main(int argc, char* argv[]) {
 #ifdef YUZU_CRASH_DUMPS
     Breakpad::InstallCrashHandler();
 #endif
+    Common::InstallCrashHandler(Common::FS::GetEdenPath(Common::FS::EdenPath::LogDir));
 
     // Init settings params
     QCoreApplication::setOrganizationName(QStringLiteral("eden"));

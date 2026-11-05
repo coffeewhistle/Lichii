@@ -21,6 +21,8 @@ Debug logs can be found in `General -> Debug -> Open Log Location` on desktop, a
 
 ## Debugging (host code)
 
+On Windows an unhandled exception writes a minidump next to the log as `lichii-<yyyymmdd-hhmmss>-<pid>.dmp` (see `Open Log Location`); attach it to crash reports.
+
 Ignoring SIGSEGV when debugging in host:
 
 - **gdb**: `handle SIGSEGV nostop pass`.
