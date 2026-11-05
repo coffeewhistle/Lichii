@@ -386,6 +386,21 @@ public:
         // Waits for a backing the GPU thread may be doing.
         Tegra::Nx2SetSparseBacking({});
         FreeReleasedRegionsAtExit();
+        {
+            // Live backings go back too. Emulation is stopping or the client is gone, so nothing
+            // queued after the wait above still renders into them.
+            std::scoped_lock lk{m_region_mutex};
+            if (!m_gpu_only_regions.empty()) {
+                LOG_DEBUG(Service, "nx2:gpu freeing {} live GPU-only backings",
+                          m_gpu_only_regions.size());
+                const auto done = std::make_shared<std::atomic<bool>>(true);
+                for (auto& entry : m_gpu_only_regions) {
+                    m_released_regions.push_back({std::move(entry.second), done});
+                }
+                m_gpu_only_regions.clear();
+                FreeReleasedRegions();
+            }
+        }
         for (auto* event : m_events) {
             if (event != nullptr) {
                 m_context.CloseEvent(event);
@@ -940,7 +955,6 @@ private:
                                                                         it->second.size);
             auto done = std::make_shared<std::atomic<bool>>(false);
             system.GPU().RunInOrder([done] { done->store(true, std::memory_order_release); });
-            m_gpu_only_bytes -= it->second.size;
             m_released_regions.push_back({std::move(it->second), done});
             m_gpu_only_regions.erase(it);
         }
