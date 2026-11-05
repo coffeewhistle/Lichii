@@ -26,11 +26,12 @@ using MiniDumpWriteDumpFn = BOOL(WINAPI*)(HANDLE, DWORD, HANDLE, MINIDUMP_TYPE,
                                           PMINIDUMP_USER_STREAM_INFORMATION,
                                           PMINIDUMP_CALLBACK_INFORMATION);
 
-constexpr size_t MaxDirectoryLength = 900;
+constexpr size_t MaxDirectoryLength = 400;
 
 MiniDumpWriteDumpFn write_dump = nullptr;
 LPTOP_LEVEL_EXCEPTION_FILTER previous_filter = nullptr;
 std::wstring dump_directory_wide;
+std::string dump_directory_utf8;
 wchar_t pid_suffix[32]{};
 std::atomic_flag dump_started;
 
@@ -57,10 +58,9 @@ LONG WINAPI CrashFilter(EXCEPTION_POINTERS* exception) {
     SYSTEMTIME time;
     GetLocalTime(&time);
 
-    wchar_t path[MaxDirectoryLength + 64];
-    wchar_t* out = path;
-    AppendString(out, dump_directory_wide.c_str());
-    AppendString(out, L"\lichii-");
+    wchar_t name[48];
+    wchar_t* out = name;
+    AppendString(out, L"lichii-");
     AppendDigits(out, time.wYear, 4);
     AppendDigits(out, time.wMonth, 2);
     AppendDigits(out, time.wDay, 2);
@@ -71,17 +71,21 @@ LONG WINAPI CrashFilter(EXCEPTION_POINTERS* exception) {
     AppendString(out, pid_suffix);
     *out = L'\0';
 
-    char path_utf8[4 * (MaxDirectoryLength + 64)];
-    if (WideCharToMultiByte(CP_UTF8, 0, path, -1, path_utf8, static_cast<int>(sizeof(path_utf8)),
-                            nullptr, nullptr) == 0) {
-        path_utf8[0] = '\0';
-    }
-    LOG_CRITICAL(Common, "Unhandled exception {:#x}, writing minidump to {}",
-                 static_cast<unsigned long>(exception->ExceptionRecord->ExceptionCode), path_utf8);
+    wchar_t path[MaxDirectoryLength + 48 + 1];
+    out = path;
+    AppendString(out, dump_directory_wide.c_str());
+    *out++ = L'\\';
+    AppendString(out, name);
+    *out = L'\0';
 
+    // Nothing may log before the dump is written: logging allocates, and the crash may have
+    // happened inside the allocator.
+    DWORD error = 0;
     const HANDLE file = CreateFileW(path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
                                     FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (file != INVALID_HANDLE_VALUE) {
+    if (file == INVALID_HANDLE_VALUE) {
+        error = GetLastError();
+    } else {
         MINIDUMP_EXCEPTION_INFORMATION info{};
         info.ThreadId = GetCurrentThreadId();
         info.ExceptionPointers = exception;
@@ -99,17 +103,28 @@ LONG WINAPI CrashFilter(EXCEPTION_POINTERS* exception) {
             ok = write_dump(GetCurrentProcess(), GetCurrentProcessId(), file, MiniDumpWithThreadInfo,
                             &info, nullptr, nullptr);
         }
-        CloseHandle(file);
         if (!ok) {
-            LOG_CRITICAL(Common, "Writing the minidump failed (error {})",
-                         static_cast<unsigned long>(GetLastError()));
+            error = GetLastError();
         }
+        CloseHandle(file);
     }
 
-    if (previous_filter != nullptr) {
-        previous_filter(exception);
+    char name_utf8[96];
+    if (WideCharToMultiByte(CP_UTF8, 0, name, -1, name_utf8, static_cast<int>(sizeof(name_utf8)),
+                            nullptr, nullptr) == 0) {
+        name_utf8[0] = '\0';
     }
-    return EXCEPTION_CONTINUE_SEARCH;
+    if (error == 0) {
+        LOG_CRITICAL(Common, "Unhandled exception {:#x}, minidump written to {}\\{}",
+                     static_cast<unsigned long>(exception->ExceptionRecord->ExceptionCode),
+                     dump_directory_utf8, name_utf8);
+    } else {
+        LOG_CRITICAL(Common, "Unhandled exception {:#x}, writing minidump {}\\{} failed (error {})",
+                     static_cast<unsigned long>(exception->ExceptionRecord->ExceptionCode),
+                     dump_directory_utf8, name_utf8, static_cast<unsigned long>(error));
+    }
+
+    return previous_filter ? previous_filter(exception) : EXCEPTION_CONTINUE_SEARCH;
 }
 
 } // Anonymous namespace
@@ -117,16 +132,23 @@ LONG WINAPI CrashFilter(EXCEPTION_POINTERS* exception) {
 
 void InstallCrashHandler(const std::filesystem::path& dump_directory) {
 #ifdef _WIN32
-    dump_directory_wide = dump_directory.wstring();
-    if (dump_directory_wide.empty() || dump_directory_wide.size() > MaxDirectoryLength) {
+    static std::atomic_flag installed;
+    if (installed.test_and_set()) {
+        LOG_WARNING(Common, "The crash handler is already installed");
+        return;
+    }
+    const std::wstring directory_wide = dump_directory.wstring();
+    if (directory_wide.empty() || directory_wide.size() > MaxDirectoryLength) {
         LOG_WARNING(Common, "Crash dumps disabled: unusable dump directory");
         return;
     }
+    dump_directory_wide = directory_wide;
+    dump_directory_utf8 = FS::PathToUTF8String(dump_directory);
     std::error_code ec;
     std::filesystem::create_directories(dump_directory, ec);
 
     // Resolved at runtime so a missing dbghelp.dll never breaks startup.
-    const HMODULE dbghelp = LoadLibraryW(L"dbghelp.dll");
+    const HMODULE dbghelp = LoadLibraryExW(L"dbghelp.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
     if (dbghelp == nullptr) {
         LOG_WARNING(Common, "Crash dumps disabled: dbghelp.dll is unavailable");
         return;
@@ -152,7 +174,7 @@ void InstallCrashHandler(const std::filesystem::path& dump_directory) {
     *suffix = L'\0';
 
     previous_filter = SetUnhandledExceptionFilter(CrashFilter);
-    LOG_INFO(Common, "Minidumps will be written to {}", FS::PathToUTF8String(dump_directory));
+    LOG_INFO(Common, "Minidumps will be written to {}", dump_directory_utf8);
 #else
     (void)dump_directory;
 #endif
