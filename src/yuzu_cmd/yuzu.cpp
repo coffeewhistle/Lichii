@@ -30,6 +30,8 @@
 
 #include <fmt/ostream.h>
 
+#include "common/crash_dump.h"
+#include "common/fs/path_util.h"
 #include "common/logging.h"
 #include "common/scm_rev.h"
 #include "common/settings.h"
@@ -423,6 +425,7 @@ extern "C" SDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv) {
     Common::Log::Initialize();
     Common::Log::SetColorConsoleBackendEnabled(true);
     Common::Log::Start();
+    Common::InstallCrashHandler(Common::FS::GetEdenPath(Common::FS::EdenPath::LogDir));
 
     int option_index = 0;
 #ifdef _WIN32

@@ -55,7 +55,7 @@ Use these before guessing. All are off unless the variable is set; pass them as 
 | Split GPU thread races | `EDEN_NX2_SPLIT_CHECK=1` | Reports scheduler use from the wrong thread. |
 | Upscaler and DLSS contracts | `EDEN_NX2_DLSS_CONTRACT_TRACE=1` | Inputs and outputs of replaced upscaler networks. |
 | Service calls | `EDEN_NX2_IPC_TRACE=1` | IPC command trace. |
-| Host crash (log just stops) | Windows minidump in `%LOCALAPPDATA%\CrashDumps\lichii.exe.<pid>.dmp` | Read the exception and stack with the `minidump` Python package, then symbolize with `llvm-symbolizer --obj=lichii.exe --inlines --relative-address <offset>` next to the build's `lichii.pdb`. |
+| Host crash (log just stops) | Windows minidump written next to the log as `lichii-<yyyymmdd-hhmmss>-<pid>.dmp` (fallback: `%LOCALAPPDATA%\CrashDumps\lichii.exe.<pid>.dmp` if WER LocalDumps is enabled) | Read the exception and stack with the `minidump` Python package, then symbolize with `llvm-symbolizer --obj=lichii.exe --inlines --relative-address <offset>` next to the build's `lichii.pdb`. |
 
 ## How work is split
 
